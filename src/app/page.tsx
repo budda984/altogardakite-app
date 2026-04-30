@@ -114,7 +114,7 @@ export default async function Dashboard() {
                   </div>
                   <div className="text-xs text-text-muted mt-1 flex gap-3">
                     {outing.wind_session && (
-                      <span>{WIND_SESSION_LABELS[outing.wind_session]}</span>
+                      <span>{WIND_SESSION_LABELS[outing.wind_session as keyof typeof WIND_SESSION_LABELS]}</span>
                     )}
                     <span>{formatTime(outing.departure_time)} → {formatTime(outing.return_time)}</span>
                     <span>{outing.participants_count} partecipanti</span>
