@@ -234,3 +234,110 @@ export const COURSE_STATUS_LABELS: Record<CourseStatus, string> = {
   sospeso: 'Sospeso',
   annullato: 'Annullato',
 };
+
+// ============================================================================
+// SERVICES (catalogo listino)
+// ============================================================================
+export type ServiceCategory =
+  | 'lift_singolo'
+  | 'lift_pacchetto'
+  | 'lift_assistito'
+  | 'iniziazione'
+  | 'pacchetto_stagionale'
+  | 'noleggio_attrezzatura'
+  | 'wingfoil'
+  | 'combo'
+  | 'storage'
+  | 'altro';
+
+export type PaymentMethod = 'contanti' | 'bancomat' | 'bonifico' | 'altro';
+
+export type EquipmentTransactionType =
+  | 'acquisto' | 'vendita' | 'dismissione' | 'manutenzione' | 'cessione';
+
+export interface Service {
+  id: string;
+  slug: string;
+  name: string;
+  category: ServiceCategory;
+  unit_price: number;
+  included_lifts: number;
+  description: string | null;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MemberService {
+  id: string;
+  member_id: string;
+  service_id: string | null;
+  service_name_snapshot: string;
+  category: ServiceCategory | null;
+  quantity: number;
+  unit_price: number;
+  total_price: number;
+  paid: boolean;
+  payment_date: string | null;
+  payment_method: PaymentMethod | null;
+  outing_id: string | null;
+  notes: string | null;
+  sold_at: string;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EquipmentTransaction {
+  id: string;
+  equipment_id: string;
+  transaction_type: EquipmentTransactionType;
+  transaction_date: string;
+  amount: number | null;
+  member_id: string | null;
+  buyer_name: string | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface MemberBalance {
+  member_id: string;
+  first_name: string;
+  last_name: string;
+  membership_number: number;
+  total_charged: number;
+  total_paid: number;
+  total_outstanding: number;
+  services_count: number;
+  unpaid_count: number;
+}
+
+export const SERVICE_CATEGORY_LABELS: Record<ServiceCategory, string> = {
+  lift_singolo: 'Lift singoli',
+  lift_pacchetto: 'Pacchetti lift',
+  lift_assistito: 'Lift assistiti',
+  iniziazione: 'Corsi di iniziazione',
+  pacchetto_stagionale: 'Pacchetti stagionali',
+  noleggio_attrezzatura: 'Noleggio attrezzatura',
+  wingfoil: 'Wingfoil',
+  combo: 'Combo lift + attrezzatura',
+  storage: 'Storage stagionale',
+  altro: 'Altro',
+};
+
+export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
+  contanti: 'Contanti',
+  bancomat: 'Bancomat / POS',
+  bonifico: 'Bonifico',
+  altro: 'Altro',
+};
+
+export const EQUIPMENT_TRANSACTION_LABELS: Record<EquipmentTransactionType, string> = {
+  acquisto: 'Acquisto',
+  vendita: 'Vendita',
+  dismissione: 'Dismissione',
+  manutenzione: 'Manutenzione',
+  cessione: 'Cessione',
+};

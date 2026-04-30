@@ -66,3 +66,60 @@ export const courseSchema = z.object({
   notes: z.string().optional().or(z.literal('')),
 });
 export type CourseFormData = z.infer<typeof courseSchema>;
+
+// ============================================================================
+// SERVICES (listino)
+// ============================================================================
+export const serviceSchema = z.object({
+  slug: z.string().min(1, 'Slug obbligatorio').max(100)
+    .regex(/^[a-z0-9_]+$/, 'Solo lettere minuscole, numeri e underscore'),
+  name: z.string().min(1, 'Nome obbligatorio').max(200),
+  category: z.enum([
+    'lift_singolo', 'lift_pacchetto', 'lift_assistito',
+    'iniziazione', 'pacchetto_stagionale', 'noleggio_attrezzatura',
+    'wingfoil', 'combo', 'storage', 'altro',
+  ]),
+  unit_price: z.coerce.number().min(0, 'Prezzo non negativo'),
+  included_lifts: z.coerce.number().int().min(0).default(0),
+  description: z.string().optional().or(z.literal('')),
+  is_active: z.boolean().default(true),
+  sort_order: z.coerce.number().int().default(0),
+});
+export type ServiceFormData = z.infer<typeof serviceSchema>;
+
+// ============================================================================
+// MEMBER SERVICES (addebiti su socio)
+// ============================================================================
+export const memberServiceSchema = z.object({
+  service_id: z.string().uuid('Servizio obbligatorio'),
+  quantity: z.coerce.number().int().min(1).default(1),
+  unit_price: z.coerce.number().min(0),
+  paid: z.boolean().default(false),
+  payment_date: z.string().optional().or(z.literal('')),
+  payment_method: z.enum(['contanti', 'bancomat', 'bonifico', 'altro']).nullable().optional(),
+  outing_id: z.string().uuid().nullable().optional(),
+  notes: z.string().optional().or(z.literal('')),
+});
+export type MemberServiceFormData = z.infer<typeof memberServiceSchema>;
+
+// Update di un addebito esistente (paid toggle, etc.)
+export const memberServiceUpdateSchema = z.object({
+  paid: z.boolean(),
+  payment_date: z.string().optional().or(z.literal('')),
+  payment_method: z.enum(['contanti', 'bancomat', 'bonifico', 'altro']).nullable().optional(),
+  notes: z.string().optional().or(z.literal('')),
+});
+export type MemberServiceUpdateData = z.infer<typeof memberServiceUpdateSchema>;
+
+// ============================================================================
+// EQUIPMENT TRANSACTIONS
+// ============================================================================
+export const equipmentTransactionSchema = z.object({
+  transaction_type: z.enum(['acquisto', 'vendita', 'dismissione', 'manutenzione', 'cessione']),
+  transaction_date: z.string().min(1, 'Data obbligatoria'),
+  amount: z.coerce.number().min(0).nullable().optional(),
+  member_id: z.string().uuid().nullable().optional(),
+  buyer_name: z.string().optional().or(z.literal('')),
+  notes: z.string().optional().or(z.literal('')),
+});
+export type EquipmentTransactionFormData = z.infer<typeof equipmentTransactionSchema>;

@@ -4,6 +4,7 @@ import { ArrowLeft, Mail, Phone, MapPin, Calendar, FileSignature, CheckCircle2, 
 import { createClient } from '@/lib/supabase/server';
 import { formatDate, calcAge } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
+import MemberServicesLedger from '@/components/MemberServicesLedger';
 
 export default async function MemberDetailPage({
   params,
@@ -83,6 +84,11 @@ export default async function MemberDetailPage({
           )}
         </div>
       </header>
+
+      {/* Servizi e pagamenti */}
+      <div className="mb-6">
+        <MemberServicesLedger memberId={id} />
+      </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Anagrafica */}

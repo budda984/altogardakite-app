@@ -3,12 +3,13 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Plus, Pencil, Trash2, Loader2, Package, Search } from 'lucide-react';
+import { Plus, Pencil, Trash2, Loader2, Package, Search, ArrowRightLeft } from 'lucide-react';
 
 import { createClient } from '@/lib/supabase/client';
 import { equipmentSchema, type EquipmentFormData } from '@/lib/validation/admin-schemas';
 import { type Equipment, type EquipmentType, EQUIPMENT_LABELS, EQUIPMENT_STATUS_LABELS } from '@/lib/types';
 import { Modal } from '@/components/Modal';
+import EquipmentTransactionModal from '@/components/EquipmentTransactionModal';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
@@ -32,6 +33,7 @@ export default function AttrezzaturaPage() {
   const [error, setError] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<EquipmentType | 'all'>('all');
   const [search, setSearch] = useState('');
+  const [txModalEquipment, setTxModalEquipment] = useState<Equipment | null>(null);
 
   const {
     register, handleSubmit, reset, formState: { errors },
@@ -236,6 +238,9 @@ export default function AttrezzaturaPage() {
                         )}
                       </div>
                       <div className="flex gap-1 shrink-0">
+                        <button onClick={() => setTxModalEquipment(e)} className="p-1.5 rounded hover:bg-bg-elevated text-text-muted hover:text-accent" title="Vendi / dismetti / movimenta">
+                          <ArrowRightLeft className="h-3.5 w-3.5" />
+                        </button>
                         <button onClick={() => openEdit(e)} className="p-1.5 rounded hover:bg-bg-elevated text-text-muted hover:text-text">
                           <Pencil className="h-3.5 w-3.5" />
                         </button>
@@ -300,6 +305,13 @@ export default function AttrezzaturaPage() {
           </div>
         </form>
       </Modal>
+
+      <EquipmentTransactionModal
+        equipment={txModalEquipment}
+        open={txModalEquipment !== null}
+        onClose={() => setTxModalEquipment(null)}
+        onSuccess={load}
+      />
     </div>
   );
 }
