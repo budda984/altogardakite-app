@@ -8,11 +8,28 @@
   html {
     font-family: 'DM Sans', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
+    /* dice al browser di usare versione scura dei controlli nativi
+       (select dropdowns, scrollbars di default, autofill, ecc) */
+    color-scheme: dark;
   }
 
   body {
     @apply bg-bg text-text;
     font-feature-settings: 'cv11', 'ss01';
+  }
+
+  /* Forza tema scuro sulle opzioni dei select nativi.
+     Su Windows/Chromium senza queste regole le option finiscono
+     bianche su bianco quando il menu si apre. */
+  select option,
+  select optgroup {
+    background-color: #1c1c1c;
+    color: #f5f5f5;
+  }
+  select option:checked,
+  select option:hover {
+    background-color: #5dceaa;
+    color: #0a0a0a;
   }
 
   h1, h2, h3, h4 {
