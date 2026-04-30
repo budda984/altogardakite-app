@@ -1,5 +1,9 @@
 import { z } from 'zod';
 
+// Helper: consenso obbligatorio (deve essere true) ma tipo TS = boolean
+const requiredConsent = (message: string) =>
+  z.boolean().refine((v) => v === true, { message });
+
 // ============================================================================
 // Schema validazione Member (domanda ammissione socio)
 // ============================================================================
@@ -36,27 +40,15 @@ export const memberSchema = z.object({
   parent_email: z.string().email().optional().or(z.literal('')),
 
   // Dichiarazioni
-  statute_accepted: z.literal(true, {
-    errorMap: () => ({ message: 'Accettazione statuto obbligatoria' }),
-  }),
-  medical_certificate: z.literal(true, {
-    errorMap: () => ({ message: 'Certificato medico obbligatorio' }),
-  }),
-  payment_commitment: z.literal(true, {
-    errorMap: () => ({ message: 'Impegno pagamento obbligatorio' }),
-  }),
+  statute_accepted: requiredConsent('Accettazione statuto obbligatoria'),
+  medical_certificate: requiredConsent('Certificato medico obbligatorio'),
+  payment_commitment: requiredConsent('Impegno pagamento obbligatorio'),
   photo_authorization: z.boolean(),
-  navigation_rules_accepted: z.literal(true, {
-    errorMap: () => ({ message: 'Accettazione regole navigazione obbligatoria' }),
-  }),
-  safeguarding_acknowledged: z.literal(true, {
-    errorMap: () => ({ message: 'Presa visione safeguarding obbligatoria' }),
-  }),
+  navigation_rules_accepted: requiredConsent('Accettazione regole navigazione obbligatoria'),
+  safeguarding_acknowledged: requiredConsent('Presa visione safeguarding obbligatoria'),
 
   // GDPR
-  gdpr_consent_1a: z.literal(true, {
-    errorMap: () => ({ message: 'Consenso GDPR finalita istituzionali obbligatorio' }),
-  }),
+  gdpr_consent_1a: requiredConsent('Consenso GDPR finalita istituzionali obbligatorio'),
   gdpr_consent_1b: z.boolean(),
 
   // Firme - obbligatorie
