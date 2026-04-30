@@ -1,15 +1,19 @@
-import { forwardRef, SelectHTMLAttributes } from 'react';
+import { forwardRef, SelectHTMLAttributes, ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
 interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   label?: string;
   error?: string;
-  options: { value: string; label: string }[];
+  options?: { value: string; label: string }[];
   placeholder?: string;
+  children?: ReactNode;
 }
 
 export const Select = forwardRef<HTMLSelectElement, SelectProps>(
-  ({ label, error, options, placeholder, className, required, ...props }, ref) => {
+  function Select(
+    { label, error, options, placeholder, className, required, children, ...props },
+    ref
+  ) {
     return (
       <div className="space-y-1.5">
         {label && (
@@ -30,15 +34,16 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
           {...props}
         >
           {placeholder && <option value="">{placeholder}</option>}
-          {options.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
+          {options
+            ? options.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))
+            : children}
         </select>
         {error && <p className="text-xs text-danger">{error}</p>}
       </div>
     );
   }
 );
-Select.displayName = 'Select';

@@ -221,3 +221,16 @@ export const COURSE_LABELS: Record<CourseType, string> = {
   privato: 'Lezione Privata',
   altro: 'Altro',
 };
+
+export const INSTRUCTOR_ROLE_LABELS: Record<InstructorRole, string> = {
+  istruttore: 'Istruttore',
+  assistente: 'Assistente',
+  direttore: 'Direttore',
+};
+
+export const COURSE_STATUS_LABELS: Record<CourseStatus, string> = {
+  attivo: 'Attivo',
+  completato: 'Completato',
+  sospeso: 'Sospeso',
+  annullato: 'Annullato',
+};
