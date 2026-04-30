@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Home, Users, Sailboat, Package, GraduationCap,
-  UserCog, Anchor, Settings, Tag, BarChart3,
+  UserCog, Anchor, Settings, Tag, BarChart3, LogOut,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -52,6 +52,10 @@ function NavLink({
 
 export function Sidebar() {
   const pathname = usePathname();
+
+  // Nasconde la sidebar nelle pagine di login
+  if (pathname.startsWith('/login')) return null;
+
   const isActive = (href: string) =>
     href === '/' ? pathname === '/' : pathname.startsWith(href);
 
@@ -90,13 +94,22 @@ export function Sidebar() {
         </div>
       </nav>
 
-      <div className="p-4 border-t border-border">
+      <div className="p-4 border-t border-border space-y-1">
         <NavLink
           href="/configurazione"
           label="Configurazione"
           icon={Settings}
           active={isActive('/configurazione')}
         />
+        <form action="/api/auth/logout" method="post">
+          <button
+            type="submit"
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm text-text-muted hover:text-red-400 hover:bg-bg-elevated transition-colors"
+          >
+            <LogOut className="h-4 w-4" />
+            Esci
+          </button>
+        </form>
       </div>
     </aside>
   );
@@ -104,6 +117,8 @@ export function Sidebar() {
 
 export function MobileNav() {
   const pathname = usePathname();
+  if (pathname.startsWith('/login')) return null;
+
   return (
     <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-bg-surface border-t border-border z-40">
       <div className="grid grid-cols-5">
