@@ -1,21 +1,15 @@
 'use client';
 
-import { use, useActionState } from 'react';
+import Link from 'next/link';
+import { useActionState } from 'react';
 import { Loader2, AlertCircle } from 'lucide-react';
-import { loginAction, type LoginState } from './actions';
+import { signupAction, type SignupState } from './actions';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 
-interface Props {
-  searchParams: Promise<{ next?: string }>;
-}
-
-export default function LoginPage({ searchParams }: Props) {
-  const sp = use(searchParams);
-  const next = sp?.next || '/';
-
-  const [state, formAction, pending] = useActionState<LoginState, FormData>(
-    loginAction,
+export default function RegistratiPage() {
+  const [state, formAction, pending] = useActionState<SignupState, FormData>(
+    signupAction,
     {}
   );
 
@@ -38,9 +32,18 @@ export default function LoginPage({ searchParams }: Props) {
           action={formAction}
           className="bg-bg-surface border border-border rounded-lg p-6 space-y-5"
         >
-          <h1 className="font-display text-xl font-semibold tracking-tight">Accedi</h1>
+          <div>
+            <h1 className="font-display text-xl font-semibold tracking-tight">Crea account</h1>
+            <p className="text-xs text-text-muted mt-1">
+              Dopo la registrazione il tuo account dovra essere approvato da un amministratore prima di poter accedere ai dati.
+            </p>
+          </div>
 
-          <input type="hidden" name="next" value={next} />
+          <Input
+            label="Nome visualizzato"
+            name="display_name"
+            placeholder="es. Mario Rossi"
+          />
 
           <Input
             label="Email"
@@ -48,14 +51,22 @@ export default function LoginPage({ searchParams }: Props) {
             type="email"
             autoComplete="email"
             required
-            autoFocus
           />
 
           <Input
             label="Password"
             name="password"
             type="password"
-            autoComplete="current-password"
+            autoComplete="new-password"
+            required
+            hint="Minimo 8 caratteri"
+          />
+
+          <Input
+            label="Conferma password"
+            name="confirm"
+            type="password"
+            autoComplete="new-password"
             required
           />
 
@@ -68,16 +79,14 @@ export default function LoginPage({ searchParams }: Props) {
 
           <Button type="submit" disabled={pending} className="w-full">
             {pending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            Accedi
+            Crea account
           </Button>
 
-          <div className="text-center text-xs text-text-muted pt-2 border-t border-border">
-            <p className="pt-3">
-              Non hai un account?{' '}
-              <a href="/registrati" className="text-accent hover:underline">
-                Registrati
-              </a>
-            </p>
+          <div className="text-center text-xs text-text-muted pt-2">
+            Hai gia un account?{' '}
+            <Link href="/login" className="text-accent hover:underline">
+              Accedi
+            </Link>
           </div>
         </form>
       </div>

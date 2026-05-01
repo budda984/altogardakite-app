@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Home, Users, Sailboat, Package, GraduationCap,
-  UserCog, Anchor, Settings, Tag, BarChart3,
+  UserCog, Anchor, Settings, Tag, BarChart3, LogOut, Shield,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -31,9 +31,14 @@ const MOBILE_NAV = [
   { href: '/configurazione', label: 'Admin', icon: Settings },
 ];
 
+interface SidebarProps {
+  isAdmin?: boolean;
+  pendingCount?: number;
+}
+
 function NavLink({
-  href, label, icon: Icon, active,
-}: { href: string; label: string; icon: typeof Home; active: boolean }) {
+  href, label, icon: Icon, active, badge,
+}: { href: string; label: string; icon: typeof Home; active: boolean; badge?: number }) {
   return (
     <Link
       href={href}
@@ -45,13 +50,22 @@ function NavLink({
       )}
     >
       <Icon className="h-4 w-4" />
-      {label}
+      <span className="flex-1">{label}</span>
+      {badge !== undefined && badge > 0 && (
+        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 font-medium">
+          {badge}
+        </span>
+      )}
     </Link>
   );
 }
 
-export function Sidebar() {
+export function Sidebar({ isAdmin = false, pendingCount = 0 }: SidebarProps) {
   const pathname = usePathname();
+  if (pathname.startsWith('/login') || pathname.startsWith('/registrati') || pathname.startsWith('/attesa')) {
+    return null;
+  }
+
   const isActive = (href: string) =>
     href === '/' ? pathname === '/' : pathname.startsWith(href);
 
@@ -88,15 +102,41 @@ export function Sidebar() {
             ))}
           </div>
         </div>
+
+        {isAdmin && (
+          <div>
+            <div className="px-3 mb-2 text-[10px] uppercase tracking-widest text-text-dim font-medium">
+              Amministrazione
+            </div>
+            <div className="space-y-1">
+              <NavLink
+                href="/utenti"
+                label="Utenti"
+                icon={Shield}
+                active={isActive('/utenti')}
+                badge={pendingCount}
+              />
+            </div>
+          </div>
+        )}
       </nav>
 
-      <div className="p-4 border-t border-border">
+      <div className="p-4 border-t border-border space-y-1">
         <NavLink
           href="/configurazione"
           label="Configurazione"
           icon={Settings}
           active={isActive('/configurazione')}
         />
+        <form action="/api/auth/logout" method="post">
+          <button
+            type="submit"
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm text-text-muted hover:text-red-400 hover:bg-bg-elevated transition-colors"
+          >
+            <LogOut className="h-4 w-4" />
+            Esci
+          </button>
+        </form>
       </div>
     </aside>
   );
@@ -104,6 +144,10 @@ export function Sidebar() {
 
 export function MobileNav() {
   const pathname = usePathname();
+  if (pathname.startsWith('/login') || pathname.startsWith('/registrati') || pathname.startsWith('/attesa')) {
+    return null;
+  }
+
   return (
     <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-bg-surface border-t border-border z-40">
       <div className="grid grid-cols-5">

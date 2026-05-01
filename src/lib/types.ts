@@ -341,3 +341,30 @@ export const EQUIPMENT_TRANSACTION_LABELS: Record<EquipmentTransactionType, stri
   manutenzione: 'Manutenzione',
   cessione: 'Cessione',
 };
+
+// ============================================================================
+// PROFILES (utenti staff con ruoli)
+// ============================================================================
+export type UserRole = 'pending' | 'staff' | 'admin';
+
+export interface Profile {
+  id: string;
+  role: UserRole;
+  display_name: string | null;
+  approved_at: string | null;
+  approved_by: string | null;
+  suspended: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProfileWithEmail extends Profile {
+  email: string | null;
+  last_sign_in_at: string | null;
+}
+
+export const USER_ROLE_LABELS: Record<UserRole, string> = {
+  pending: 'In attesa',
+  staff: 'Staff',
+  admin: 'Amministratore',
+};
