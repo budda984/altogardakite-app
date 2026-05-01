@@ -54,7 +54,7 @@ export default function AddParticipantModal({
   } = useForm<PlanningParticipantFormData>({
     resolver: zodResolver(planningParticipantSchema),
     defaultValues: {
-      participation_type: 'lift',
+      participation_type: 'lift_semplice',
       rental_type: 'nessuno',
       billing_mode: 'no_charge',
     },
@@ -124,7 +124,7 @@ export default function AddParticipantModal({
     if (open) {
       reset({
         member_id: undefined,
-        participation_type: 'lift',
+        participation_type: 'lift_semplice',
         rental_type: 'nessuno',
         billing_mode: 'no_charge',
         package_id: null,
@@ -245,19 +245,21 @@ export default function AddParticipantModal({
             {/* Tipo partecipazione */}
             <div className="grid grid-cols-2 gap-4">
               <Select label="Tipo partecipazione" {...register('participation_type')}>
-                <option value="lift">Lift</option>
-                <option value="lift_supervisionato">Lift assistito</option>
+                <option value="lift_semplice">Lift semplice</option>
+                <option value="lift_supervisionato">Lift assistito / supervisionato</option>
                 <option value="corso">Corso</option>
               </Select>
               <Select label="Noleggio" {...register('rental_type')}>
                 <option value="nessuno">Nessuno</option>
-                <option value="kite_completo">Kite + tavola</option>
-                <option value="kite">Solo kite</option>
-                <option value="tavola">Solo tavola</option>
-                <option value="wingfoil">Wingfoil</option>
-                <option value="trapezio">Trapezio</option>
-                <option value="muta">Muta</option>
-                <option value="casco_giubbotto">Casco/giubbotto</option>
+                <option value="completo">Kit completo (kite + tavola)</option>
+                <option value="wing_completo">Wingfoil completo</option>
+                <option value="solo_kite">Solo kite</option>
+                <option value="solo_tavola">Solo tavola</option>
+                <option value="solo_barra">Solo barra</option>
+                <option value="solo_trapezio">Solo trapezio</option>
+                <option value="solo_muta">Solo muta</option>
+                <option value="solo_giubbotto">Solo giubbotto/casco</option>
+                <option value="altro">Altro</option>
               </Select>
             </div>
 

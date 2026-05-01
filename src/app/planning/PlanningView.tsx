@@ -406,26 +406,28 @@ function SessionBlock({
 // BOAT OUTING (una barca con i suoi partecipanti)
 // ============================================================================
 const RENTAL_LABELS_SHORT: Record<string, string> = {
-  kite_completo: 'Kite + tavola',
-  kite: 'Kite',
-  tavola: 'Tavola',
-  wingfoil: 'Wingfoil',
-  trapezio: 'Trapezio',
-  muta: 'Muta',
-  casco_giubbotto: 'Casco/giubb.',
+  completo: 'Kit completo',
+  wing_completo: 'Wingfoil',
+  solo_kite: 'Kite',
+  solo_tavola: 'Tavola',
+  solo_barra: 'Barra',
+  solo_trapezio: 'Trapezio',
+  solo_muta: 'Muta',
+  solo_giubbotto: 'Giubbotto',
+  altro: 'Altro',
   nessuno: '',
 };
 
 const PARTECIPATION_COLORS: Record<string, string> = {
   corso: 'bg-blue-500/10 text-blue-400',
   lift_supervisionato: 'bg-purple-500/10 text-purple-400',
-  lift: 'bg-emerald-500/10 text-emerald-400',
+  lift_semplice: 'bg-emerald-500/10 text-emerald-400',
 };
 
 const PARTECIPATION_LABELS: Record<string, string> = {
   corso: 'Corso',
   lift_supervisionato: 'Lift assistito',
-  lift: 'Lift',
+  lift_semplice: 'Lift',
 };
 
 function BoatOuting({

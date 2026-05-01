@@ -208,10 +208,10 @@ export type PlanningOutingFormData = z.infer<typeof planningOutingSchema>;
 // ============================================================================
 export const planningParticipantSchema = z.object({
   member_id: z.string().uuid('Socio obbligatorio'),
-  participation_type: z.enum(['corso', 'lift_supervisionato', 'lift']).default('lift'),
+  participation_type: z.enum(['corso', 'lift_supervisionato', 'lift_semplice']).default('lift_semplice'),
   rental_type: z.enum([
-    'kite_completo', 'kite', 'tavola', 'wingfoil', 'trapezio',
-    'muta', 'casco_giubbotto', 'nessuno',
+    'nessuno', 'completo', 'solo_tavola', 'solo_kite', 'solo_barra',
+    'solo_trapezio', 'solo_muta', 'solo_giubbotto', 'wing_completo', 'altro',
   ]).default('nessuno'),
   // gestione credito: se "consume_package" usa il pacchetto suggerito (FIFO)
   // se "charge" addebita il prezzo del lift singolo
