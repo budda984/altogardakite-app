@@ -23,7 +23,6 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
         )}
         <select
           ref={ref}
-          style={{ colorScheme: 'dark' }}
           className={cn(
             'w-full rounded-md bg-bg-input border border-border px-3 py-2 text-sm',
             'text-text appearance-none cursor-pointer',
