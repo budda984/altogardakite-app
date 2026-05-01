@@ -262,6 +262,7 @@ export interface Service {
   category: ServiceCategory;
   unit_price: number;
   included_lifts: number;
+  discipline: LiftDiscipline;
   description: string | null;
   is_active: boolean;
   sort_order: number;
@@ -367,4 +368,88 @@ export const USER_ROLE_LABELS: Record<UserRole, string> = {
   pending: 'In attesa',
   staff: 'Staff',
   admin: 'Amministratore',
+};
+
+// ============================================================================
+// WALLET / PACKAGES / MOVEMENTS
+// ============================================================================
+export type LiftDiscipline = 'kite' | 'wingfoil' | 'sit_kite' | 'wingfoil_adattato' | 'altro';
+
+export type MovementType =
+  | 'acquisto_pacchetto'
+  | 'pagamento'
+  | 'consumo_lift'
+  | 'addebito'
+  | 'rimborso'
+  | 'correzione';
+
+export interface Package {
+  id: string;
+  member_id: string;
+  service_id: string | null;
+  service_name_snapshot: string;
+  discipline: LiftDiscipline;
+  lifts_total: number;
+  lifts_used: number;
+  total_price: number;
+  is_exhausted: boolean;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Movement {
+  id: string;
+  member_id: string;
+  movement_type: MovementType;
+  movement_date: string;
+  description: string;
+  amount: number;
+  lift_delta: number;
+  lift_discipline: LiftDiscipline | null;
+  package_id: string | null;
+  service_id: string | null;
+  outing_id: string | null;
+  paid: boolean;
+  payment_method: PaymentMethod | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface MemberWallet {
+  member_id: string;
+  first_name: string;
+  last_name: string;
+  membership_number: number;
+  monetary_balance: number; // positivo: a credito, negativo: deve soldi
+  total_received: number;
+  total_outstanding: number;
+  movements_count: number;
+}
+
+export interface LiftBalance {
+  member_id: string;
+  discipline: LiftDiscipline;
+  lifts_remaining: number;
+  lifts_total: number;
+  packages_count: number;
+  packages_active: number;
+}
+
+export const DISCIPLINE_LABELS: Record<LiftDiscipline, string> = {
+  kite: 'Kite',
+  wingfoil: 'Wingfoil',
+  sit_kite: 'Sit\'n\'kite',
+  wingfoil_adattato: 'Wingfoil adattato',
+  altro: 'Altro',
+};
+
+export const MOVEMENT_TYPE_LABELS: Record<MovementType, string> = {
+  acquisto_pacchetto: 'Acquisto pacchetto',
+  pagamento: 'Pagamento',
+  consumo_lift: 'Consumo lift',
+  addebito: 'Addebito',
+  rimborso: 'Rimborso',
+  correzione: 'Correzione',
 };

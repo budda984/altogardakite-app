@@ -123,3 +123,49 @@ export const equipmentTransactionSchema = z.object({
   notes: z.string().optional().or(z.literal('')),
 });
 export type EquipmentTransactionFormData = z.infer<typeof equipmentTransactionSchema>;
+
+// ============================================================================
+// WALLET: acquisto pacchetto
+// ============================================================================
+export const purchasePackageSchema = z.object({
+  service_id: z.string().uuid('Servizio obbligatorio'),
+  total_price: z.coerce.number().min(0),
+  paid_now: z.boolean().default(true),
+  payment_method: z.enum(['contanti', 'bancomat', 'bonifico', 'altro']).nullable().optional(),
+  notes: z.string().optional().or(z.literal('')),
+});
+export type PurchasePackageFormData = z.infer<typeof purchasePackageSchema>;
+
+// ============================================================================
+// WALLET: addebito singolo (servizio non da pacchetto)
+// ============================================================================
+export const chargeServiceSchema = z.object({
+  service_id: z.string().uuid('Servizio obbligatorio'),
+  quantity: z.coerce.number().int().min(1).default(1),
+  unit_price: z.coerce.number().min(0),
+  paid_now: z.boolean().default(false),
+  payment_method: z.enum(['contanti', 'bancomat', 'bonifico', 'altro']).nullable().optional(),
+  notes: z.string().optional().or(z.literal('')),
+});
+export type ChargeServiceFormData = z.infer<typeof chargeServiceSchema>;
+
+// ============================================================================
+// WALLET: pagamento (chiude debiti)
+// ============================================================================
+export const paymentSchema = z.object({
+  amount: z.coerce.number().positive('Importo deve essere maggiore di zero'),
+  payment_method: z.enum(['contanti', 'bancomat', 'bonifico', 'altro']),
+  notes: z.string().optional().or(z.literal('')),
+});
+export type PaymentFormData = z.infer<typeof paymentSchema>;
+
+// ============================================================================
+// WALLET: consumo lift manuale (collegato a uscita)
+// ============================================================================
+export const consumeLiftSchema = z.object({
+  discipline: z.enum(['kite', 'wingfoil', 'sit_kite', 'wingfoil_adattato', 'altro']),
+  package_id: z.string().uuid().nullable().optional(), // se null, l'app sceglie FIFO
+  outing_id: z.string().uuid().nullable().optional(),
+  notes: z.string().optional().or(z.literal('')),
+});
+export type ConsumeLiftFormData = z.infer<typeof consumeLiftSchema>;

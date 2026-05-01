@@ -4,7 +4,7 @@ import { ArrowLeft, Mail, Phone, MapPin, Calendar, FileSignature, CheckCircle2, 
 import { createClient } from '@/lib/supabase/server';
 import { formatDate, calcAge } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
-import MemberServicesLedger from '@/components/MemberServicesLedger';
+import MemberWalletPanel from '@/components/MemberWalletPanel';
 
 export default async function MemberDetailPage({
   params,
@@ -26,7 +26,7 @@ export default async function MemberDetailPage({
   if (!member) notFound();
 
   // Corsi e uscite del socio
-  const [{ data: courses }, { data: outings }] = await Promise.all([
+  const [{ data: courses }, { data: outings }, { data: services }] = await Promise.all([
     supabase
       .from('courses')
       .select('*')
@@ -38,6 +38,12 @@ export default async function MemberDetailPage({
       .eq('member_id', id)
       .order('outings(outing_date)', { ascending: false })
       .limit(10),
+    supabase
+      .from('services')
+      .select('*')
+      .eq('is_active', true)
+      .order('sort_order')
+      .order('name'),
   ]);
 
   return (
@@ -87,7 +93,7 @@ export default async function MemberDetailPage({
 
       {/* Servizi e pagamenti */}
       <div className="mb-6">
-        <MemberServicesLedger memberId={id} />
+        <MemberWalletPanel memberId={id} services={services || []} />
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
