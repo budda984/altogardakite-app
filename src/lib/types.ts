@@ -453,3 +453,21 @@ export const MOVEMENT_TYPE_LABELS: Record<MovementType, string> = {
   rimborso: 'Rimborso',
   correzione: 'Correzione',
 };
+
+// ============================================================================
+// PLANNING / SESSION TEMPLATES
+// ============================================================================
+export interface SessionTemplate {
+  id: string;
+  name: string;
+  discipline: LiftDiscipline;
+  wind_session: WindSession | null;
+  default_departure_time: string;  // HH:MM
+  default_return_time: string;
+  sort_order: number;
+  is_default: boolean;
+  is_active: boolean;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}

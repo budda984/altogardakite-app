@@ -164,8 +164,62 @@ export type PaymentFormData = z.infer<typeof paymentSchema>;
 // ============================================================================
 export const consumeLiftSchema = z.object({
   discipline: z.enum(['kite', 'wingfoil', 'sit_kite', 'wingfoil_adattato', 'altro']),
-  package_id: z.string().uuid().nullable().optional(), // se null, l'app sceglie FIFO
+  package_id: z.string().uuid().nullable().optional(),
   outing_id: z.string().uuid().nullable().optional(),
   notes: z.string().optional().or(z.literal('')),
 });
 export type ConsumeLiftFormData = z.infer<typeof consumeLiftSchema>;
+
+// ============================================================================
+// SESSION TEMPLATES
+// ============================================================================
+export const sessionTemplateSchema = z.object({
+  name: z.string().min(1, 'Nome obbligatorio').max(100),
+  discipline: z.enum(['kite', 'wingfoil', 'sit_kite', 'wingfoil_adattato', 'altro']),
+  wind_session: z.enum(['peler', 'ora', 'ora_serale']).nullable().optional(),
+  default_departure_time: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/, 'Formato HH:MM'),
+  default_return_time: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/, 'Formato HH:MM'),
+  sort_order: z.coerce.number().int().default(0),
+  is_default: z.boolean().default(true),
+  is_active: z.boolean().default(true),
+  notes: z.string().optional().or(z.literal('')),
+});
+export type SessionTemplateFormData = z.infer<typeof sessionTemplateSchema>;
+
+// ============================================================================
+// PLANNING: crea/aggiungi barca a sessione
+// ============================================================================
+export const planningOutingSchema = z.object({
+  outing_date: z.string().min(1, 'Data obbligatoria'),
+  session_template_id: z.string().uuid().nullable().optional(),
+  boat_id: z.string().uuid('Imbarcazione obbligatoria'),
+  departure_time: z.string().optional().or(z.literal('')),
+  return_time: z.string().optional().or(z.literal('')),
+  discipline: z.enum(['kite', 'wingfoil', 'sit_kite', 'wingfoil_adattato', 'altro']).optional(),
+  wind_session: z.enum(['peler', 'ora', 'ora_serale']).nullable().optional(),
+  weather_notes: z.string().optional().or(z.literal('')),
+  notes: z.string().optional().or(z.literal('')),
+  instructor_ids: z.array(z.string().uuid()).default([]),
+});
+export type PlanningOutingFormData = z.infer<typeof planningOutingSchema>;
+
+// ============================================================================
+// PLANNING: aggiungi partecipante a uscita
+// ============================================================================
+export const planningParticipantSchema = z.object({
+  member_id: z.string().uuid('Socio obbligatorio'),
+  participation_type: z.enum(['corso', 'lift_supervisionato', 'lift']).default('lift'),
+  rental_type: z.enum([
+    'kite_completo', 'kite', 'tavola', 'wingfoil', 'trapezio',
+    'muta', 'casco_giubbotto', 'nessuno',
+  ]).default('nessuno'),
+  // gestione credito: se "consume_package" usa il pacchetto suggerito (FIFO)
+  // se "charge" addebita il prezzo del lift singolo
+  // se "no_charge" non fa nulla (solo registra la presenza)
+  billing_mode: z.enum(['consume_package', 'charge_unpaid', 'charge_paid', 'no_charge']).default('no_charge'),
+  package_id: z.string().uuid().nullable().optional(),
+  charge_amount: z.coerce.number().min(0).nullable().optional(),
+  payment_method: z.enum(['contanti', 'bancomat', 'bonifico', 'altro']).nullable().optional(),
+  notes: z.string().optional().or(z.literal('')),
+});
+export type PlanningParticipantFormData = z.infer<typeof planningParticipantSchema>;

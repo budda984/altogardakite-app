@@ -4,12 +4,13 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Home, Users, Sailboat, Package, GraduationCap,
-  UserCog, Anchor, Settings, Tag, BarChart3, LogOut, Shield,
+  UserCog, Anchor, Settings, Tag, BarChart3, LogOut, Shield, CalendarDays,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const MAIN_NAV = [
   { href: '/', label: 'Dashboard', icon: Home },
+  { href: '/planning', label: 'Planning', icon: CalendarDays },
   { href: '/soci', label: 'Soci', icon: Users },
   { href: '/uscite', label: 'Uscite', icon: Sailboat },
   { href: '/statistiche', label: 'Statistiche', icon: BarChart3 },
@@ -25,9 +26,9 @@ const ADMIN_NAV = [
 
 const MOBILE_NAV = [
   { href: '/', label: 'Home', icon: Home },
+  { href: '/planning', label: 'Planning', icon: CalendarDays },
   { href: '/soci', label: 'Soci', icon: Users },
   { href: '/uscite', label: 'Uscite', icon: Sailboat },
-  { href: '/statistiche', label: 'Stats', icon: BarChart3 },
   { href: '/configurazione', label: 'Admin', icon: Settings },
 ];
 
