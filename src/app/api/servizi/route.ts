@@ -23,6 +23,7 @@ export async function POST(request: NextRequest) {
         category: data.category,
         unit_price: data.unit_price,
         included_lifts: data.included_lifts,
+        is_subscription: data.is_subscription,
         description: data.description || null,
         is_active: data.is_active,
         sort_order: data.sort_order,

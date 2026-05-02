@@ -81,6 +81,7 @@ export const serviceSchema = z.object({
   ]),
   unit_price: z.coerce.number().min(0, 'Prezzo non negativo'),
   included_lifts: z.coerce.number().int().min(0).default(0),
+  is_subscription: z.boolean().default(false),
   description: z.string().optional().or(z.literal('')),
   is_active: z.boolean().default(true),
   sort_order: z.coerce.number().int().default(0),
@@ -132,6 +133,9 @@ export const purchasePackageSchema = z.object({
   total_price: z.coerce.number().min(0),
   paid_now: z.boolean().default(true),
   payment_method: z.enum(['contanti', 'bancomat', 'bonifico', 'altro']).nullable().optional(),
+  // Date di validita (solo per abbonamenti). Nullable: il backend le calcola.
+  valid_from: z.string().optional().or(z.literal('')),
+  valid_until: z.string().optional().or(z.literal('')),
   notes: z.string().optional().or(z.literal('')),
 });
 export type PurchasePackageFormData = z.infer<typeof purchasePackageSchema>;
@@ -216,7 +220,9 @@ export const planningParticipantSchema = z.object({
   // gestione credito: se "consume_package" usa il pacchetto suggerito (FIFO)
   // se "charge" addebita il prezzo del lift singolo
   // se "no_charge" non fa nulla (solo registra la presenza)
-  billing_mode: z.enum(['consume_package', 'charge_unpaid', 'charge_paid', 'no_charge']).default('no_charge'),
+  billing_mode: z.enum([
+    'consume_package', 'charge_unpaid', 'charge_paid', 'no_charge', 'covered_by_subscription'
+  ]).default('no_charge'),
   package_id: z.string().uuid().nullable().optional(),
   charge_amount: z.coerce.number().min(0).nullable().optional(),
   payment_method: z.enum(['contanti', 'bancomat', 'bonifico', 'altro']).nullable().optional(),

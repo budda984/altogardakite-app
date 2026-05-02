@@ -3,21 +3,35 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Loader2, Search, AlertCircle, Check, Wind, Euro } from 'lucide-react';
+import {
+  Loader2, Search, Wind, Euro, Sparkles, Check, AlertCircle, Receipt,
+} from 'lucide-react';
+import { z } from 'zod';
 import { Modal } from '@/components/Modal';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
 import { Textarea } from '@/components/ui/Textarea';
-import {
-  planningParticipantSchema, type PlanningParticipantFormData,
-} from '@/lib/validation/admin-schemas';
 import type {
-  Member, Service, Package, MemberWallet, LiftBalance,
-  LiftDiscipline, PaymentMethod,
+  Member, Service, Package, ActiveSubscription,
+  LiftDiscipline,
 } from '@/lib/types';
-import { DISCIPLINE_LABELS, PAYMENT_METHOD_LABELS } from '@/lib/types';
+import { DISCIPLINE_LABELS } from '@/lib/types';
+import { findRentalService, findSingleLiftService } from '@/lib/rental-pricing';
 import { cn } from '@/lib/utils';
+
+const participantSchema = z.object({
+  member_id: z.string().uuid('Socio obbligatorio'),
+  participation_type: z.enum(['corso', 'lift_supervisionato', 'lift_semplice']).default('lift_semplice'),
+  rental_type: z.enum([
+    'nessuno', 'completo', 'solo_tavola', 'solo_kite', 'solo_barra',
+    'solo_trapezio', 'solo_muta', 'solo_giubbotto', 'wing_completo', 'altro',
+  ]).default('nessuno'),
+  rental_charge_amount: z.coerce.number().min(0).nullable().optional(),
+  notes: z.string().optional().or(z.literal('')),
+});
+
+type ParticipantFormData = z.infer<typeof participantSchema>;
 
 interface OutingMin {
   id: string;
@@ -41,9 +55,8 @@ export default function AddParticipantModal({
   const [error, setError] = useState<string | null>(null);
   const [memberSearch, setMemberSearch] = useState('');
   const [walletData, setWalletData] = useState<{
-    wallet: MemberWallet | null;
-    lift_balances: LiftBalance[];
     packages: Package[];
+    active_subscriptions: ActiveSubscription[];
   } | null>(null);
   const [walletLoading, setWalletLoading] = useState(false);
 
@@ -51,18 +64,17 @@ export default function AddParticipantModal({
 
   const {
     register, handleSubmit, reset, watch, setValue, formState: { errors },
-  } = useForm<PlanningParticipantFormData>({
-    resolver: zodResolver(planningParticipantSchema),
+  } = useForm<ParticipantFormData>({
+    resolver: zodResolver(participantSchema),
     defaultValues: {
       participation_type: 'lift_semplice',
       rental_type: 'nessuno',
-      billing_mode: 'no_charge',
     },
   });
 
   const memberId = watch('member_id');
-  const billingMode = watch('billing_mode');
-  const packageId = watch('package_id');
+  const participationType = watch('participation_type');
+  const rentalType = watch('rental_type');
 
   // Filtra soci per ricerca
   const filteredMembers = useMemo(() => {
@@ -83,53 +95,22 @@ export default function AddParticipantModal({
     setWalletLoading(true);
     fetch(`/api/soci/${memberId}/wallet`)
       .then((r) => r.json())
-      .then((data) => setWalletData(data))
+      .then((data) => setWalletData({
+        packages: data.packages,
+        active_subscriptions: data.active_subscriptions,
+      }))
       .catch(() => setWalletData(null))
       .finally(() => setWalletLoading(false));
   }, [memberId]);
 
-  // Calcola pacchetti compatibili con la disciplina dell'uscita
-  const availablePackages = useMemo(() => {
-    if (!walletData) return [];
-    return walletData.packages.filter(
-      (p) => !p.is_exhausted && p.discipline === discipline
-    );
-  }, [walletData, discipline]);
-
-  // Lift residui per la disciplina dell'uscita
-  const liftBalance = walletData?.lift_balances.find((b) => b.discipline === discipline);
-
-  // Suggerimento: se ha lift, suggerisci consume_package; altrimenti charge_unpaid
-  useEffect(() => {
-    if (!walletData) return;
-    if (availablePackages.length > 0) {
-      setValue('billing_mode', 'consume_package');
-      // Se non c'e ancora un package_id selezionato, usa il primo (FIFO)
-      if (!packageId && availablePackages[0]) {
-        setValue('package_id', availablePackages[0].id);
-      }
-    } else {
-      setValue('billing_mode', 'charge_unpaid');
-      // Suggerisci prezzo lift singolo della disciplina
-      const liftService = services.find(
-        (s) => s.discipline === discipline && s.included_lifts === 1 && s.category === 'lift_singolo'
-      );
-      if (liftService) {
-        setValue('charge_amount', liftService.unit_price);
-      }
-    }
-  }, [walletData, availablePackages, services, discipline, packageId, setValue]);
-
+  // Reset al cambio open
   useEffect(() => {
     if (open) {
       reset({
         member_id: undefined,
         participation_type: 'lift_semplice',
         rental_type: 'nessuno',
-        billing_mode: 'no_charge',
-        package_id: null,
-        charge_amount: null,
-        payment_method: 'contanti',
+        rental_charge_amount: null,
         notes: '',
       });
       setMemberSearch('');
@@ -138,7 +119,7 @@ export default function AddParticipantModal({
     }
   }, [open, reset]);
 
-  const onSubmit = async (data: PlanningParticipantFormData) => {
+  const onSubmit = async (data: ParticipantFormData) => {
     setSubmitting(true);
     setError(null);
     try {
@@ -162,16 +143,74 @@ export default function AddParticipantModal({
 
   const memberSelected = memberId ? members.find((m) => m.id === memberId) : null;
 
+  // Calcola anteprima addebito
+  const preview = useMemo(() => {
+    if (!walletData || !memberId) return null;
+
+    const result: { items: { label: string; cost: number; covered: 'sub' | 'pkg' | 'paid' | 'pending' }[]; total: number } = {
+      items: [],
+      total: 0,
+    };
+
+    // Lift?
+    if (participationType === 'lift_semplice' || participationType === 'lift_supervisionato') {
+      const hasLiftSub = walletData.active_subscriptions.some(
+        (s) => s.discipline === discipline
+      );
+      if (hasLiftSub) {
+        result.items.push({ label: `Lift ${DISCIPLINE_LABELS[discipline]}`, cost: 0, covered: 'sub' });
+      } else {
+        const liftPackages = walletData.packages.filter(
+          (p) => !p.is_subscription && !p.is_exhausted && p.discipline === discipline
+        );
+        if (liftPackages.length > 0) {
+          result.items.push({ label: `Lift ${DISCIPLINE_LABELS[discipline]}`, cost: 0, covered: 'pkg' });
+        } else {
+          const liftSvc = findSingleLiftService(discipline, services);
+          const cost = liftSvc?.unit_price || 35;
+          result.items.push({ label: `Lift ${DISCIPLINE_LABELS[discipline]}`, cost, covered: 'pending' });
+          result.total += cost;
+        }
+      }
+    }
+
+    // Noleggio?
+    if (rentalType !== 'nessuno') {
+      const hasAttrSub = walletData.active_subscriptions.some(
+        (s) => s.service_name_snapshot.toLowerCase().includes('attrezzatura')
+      );
+      const rentalSvc = findRentalService(rentalType, services);
+      const cost = rentalSvc?.unit_price || 0;
+      const label = `Noleggio ${rentalType.replace('_', ' ')}`;
+      if (hasAttrSub) {
+        result.items.push({ label, cost: 0, covered: 'sub' });
+      } else if (cost > 0) {
+        result.items.push({ label, cost, covered: 'pending' });
+        result.total += cost;
+      }
+    }
+
+    return result;
+  }, [walletData, memberId, participationType, rentalType, discipline, services]);
+
+  const liftPackages = walletData?.packages.filter(
+    (p) => !p.is_subscription && !p.is_exhausted && p.discipline === discipline
+  ) || [];
+  const totalLiftsRemaining = liftPackages.reduce((sum, p) => sum + (p.lifts_total - p.lifts_used), 0);
+  const liftSub = walletData?.active_subscriptions.find((s) => s.discipline === discipline);
+  const attrSub = walletData?.active_subscriptions.find(
+    (s) => s.service_name_snapshot.toLowerCase().includes('attrezzatura')
+  );
+
   return (
     <Modal
       open={open}
       onClose={onClose}
       title={`Aggiungi partecipante a ${outing.boat?.name || 'uscita'}`}
-      description={`Disciplina dell'uscita: ${DISCIPLINE_LABELS[discipline]}`}
+      description={`Disciplina dell'uscita: ${DISCIPLINE_LABELS[discipline]} · gli addebiti saranno generati alla chiusura`}
       size="lg"
     >
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-        {/* Step 1: ricerca socio */}
         {!memberId ? (
           <div>
             <label className="block text-sm font-medium text-text mb-2">
@@ -198,9 +237,7 @@ export default function AddParticipantModal({
                     onClick={() => setValue('member_id', m.id)}
                     className="w-full p-3 text-left hover:bg-bg-surface text-sm flex items-center justify-between"
                   >
-                    <span className="text-text">
-                      {m.last_name} {m.first_name}
-                    </span>
+                    <span className="text-text">{m.last_name} {m.first_name}</span>
                     <span className="text-xs text-text-dim">#{m.membership_number}</span>
                   </button>
                 ))
@@ -222,24 +259,42 @@ export default function AddParticipantModal({
               </div>
               <button
                 type="button"
-                onClick={() => setValue('member_id', '')}
+                onClick={() => { setValue('member_id', ''); setMemberSearch(''); }}
                 className="text-xs text-accent hover:underline"
               >
                 Cambia socio
               </button>
             </div>
 
-            {/* Stato wallet del socio */}
+            {/* Banner abbonamenti attivi */}
             {walletLoading ? (
-              <div className="p-3 text-center text-text-muted text-sm">
-                <Loader2 className="h-4 w-4 animate-spin mx-auto" />
-              </div>
+              <div className="p-3 text-center"><Loader2 className="h-4 w-4 animate-spin mx-auto text-text-muted" /></div>
             ) : walletData && (
-              <WalletSummary
-                discipline={discipline}
-                liftBalance={liftBalance}
-                monetaryBalance={Number(walletData.wallet?.monetary_balance || 0)}
-              />
+              <div className="space-y-2">
+                {liftSub && (
+                  <SubscriptionBanner
+                    icon={<Sparkles className="h-4 w-4" />}
+                    text={`Abbonamento ${DISCIPLINE_LABELS[discipline]}: ${liftSub.service_name_snapshot}`}
+                    days={liftSub.days_remaining}
+                  />
+                )}
+                {attrSub && (
+                  <SubscriptionBanner
+                    icon={<Sparkles className="h-4 w-4" />}
+                    text={`Abbonamento attrezzatura: ${attrSub.service_name_snapshot}`}
+                    days={attrSub.days_remaining}
+                  />
+                )}
+                {!liftSub && totalLiftsRemaining > 0 && (
+                  <div className="p-2.5 rounded-md bg-emerald-500/5 border border-emerald-500/20 text-xs flex items-center gap-2">
+                    <Wind className="h-3.5 w-3.5 text-emerald-400" />
+                    <span className="text-text-muted">
+                      Lift {DISCIPLINE_LABELS[discipline]} residui:{' '}
+                      <strong className="text-emerald-400">{totalLiftsRemaining}</strong>
+                    </span>
+                  </div>
+                )}
+              </div>
             )}
 
             {/* Tipo partecipazione */}
@@ -247,9 +302,9 @@ export default function AddParticipantModal({
               <Select label="Tipo partecipazione" {...register('participation_type')}>
                 <option value="lift_semplice">Lift semplice</option>
                 <option value="lift_supervisionato">Lift assistito / supervisionato</option>
-                <option value="corso">Corso</option>
+                <option value="corso">Corso (non addebitato qui)</option>
               </Select>
-              <Select label="Noleggio" {...register('rental_type')}>
+              <Select label="Noleggio attrezzatura" {...register('rental_type')}>
                 <option value="nessuno">Nessuno</option>
                 <option value="completo">Kit completo (kite + tavola)</option>
                 <option value="wing_completo">Wingfoil completo</option>
@@ -263,84 +318,41 @@ export default function AddParticipantModal({
               </Select>
             </div>
 
-            {/* Modalita di addebito */}
-            <div className="space-y-3">
-              <label className="block text-sm font-medium text-text">
-                Come addebitiamo questo lift?
-              </label>
-
-              <BillingOption
-                value="consume_package"
-                current={billingMode}
-                onChange={(v) => setValue('billing_mode', v)}
-                disabled={availablePackages.length === 0}
-                label="Consuma da pacchetto"
-                desc={
-                  availablePackages.length > 0
-                    ? `Scala 1 lift dal pacchetto residuo`
-                    : `Nessun pacchetto disponibile per ${DISCIPLINE_LABELS[discipline]}`
-                }
-              />
-
-              {billingMode === 'consume_package' && availablePackages.length > 1 && (
-                <Select
-                  label="Da quale pacchetto?"
-                  {...register('package_id')}
-                >
-                  {availablePackages.map((p, i) => (
-                    <option key={p.id} value={p.id}>
-                      {p.service_name_snapshot} ({p.lifts_total - p.lifts_used} residui)
-                      {i === 0 ? ' [piu vecchio - consigliato]' : ''}
-                    </option>
-                  ))}
-                </Select>
-              )}
-
-              <BillingOption
-                value="charge_paid"
-                current={billingMode}
-                onChange={(v) => setValue('billing_mode', v)}
-                label="Pagamento immediato"
-                desc="Il socio paga ora il lift singolo"
-              />
-
-              <BillingOption
-                value="charge_unpaid"
-                current={billingMode}
-                onChange={(v) => setValue('billing_mode', v)}
-                label="Addebita (pagher&aacute; dopo)"
-                desc="Aggiunge un debito al wallet"
-              />
-
-              <BillingOption
-                value="no_charge"
-                current={billingMode}
-                onChange={(v) => setValue('billing_mode', v)}
-                label="Nessun addebito"
-                desc="Solo registra la presenza, senza ricaduta sul wallet"
-              />
-
-              {(billingMode === 'charge_paid' || billingMode === 'charge_unpaid') && (
-                <div className="grid grid-cols-2 gap-3 pl-6 pt-1">
-                  <Input
-                    label="Importo €"
-                    type="number"
-                    step="0.01"
-                    min={0}
-                    {...register('charge_amount')}
-                  />
-                  {billingMode === 'charge_paid' && (
-                    <Select label="Metodo" {...register('payment_method')}>
-                      {(Object.keys(PAYMENT_METHOD_LABELS) as PaymentMethod[]).map((m) => (
-                        <option key={m} value={m}>{PAYMENT_METHOD_LABELS[m]}</option>
-                      ))}
-                    </Select>
-                  )}
+            {/* Anteprima addebito alla chiusura */}
+            {preview && preview.items.length > 0 && (
+              <div className="p-3 rounded border border-border bg-bg-elevated space-y-2">
+                <div className="flex items-center gap-2 text-xs font-medium text-text-muted">
+                  <Receipt className="h-3.5 w-3.5" />
+                  Alla chiusura uscita verrà addebitato:
                 </div>
-              )}
-            </div>
+                <div className="space-y-1.5">
+                  {preview.items.map((item, i) => (
+                    <PreviewLine key={i} {...item} />
+                  ))}
+                </div>
+                {preview.total > 0 && (
+                  <div className="pt-2 border-t border-border flex items-center justify-between">
+                    <span className="text-xs text-text-muted">Totale da addebitare</span>
+                    <span className="font-display font-bold text-amber-400 flex items-center gap-1">
+                      <Euro className="h-3.5 w-3.5" />
+                      {preview.total.toFixed(2)}
+                    </span>
+                  </div>
+                )}
+                {preview.total === 0 && preview.items.length > 0 && (
+                  <div className="pt-2 border-t border-border text-xs text-emerald-400 flex items-center gap-1.5">
+                    <Check className="h-3.5 w-3.5" />
+                    Tutto coperto da abbonamenti / pacchetti
+                  </div>
+                )}
+              </div>
+            )}
 
-            <Textarea label="Note" {...register('notes')} />
+            <Textarea
+              label="Note sul partecipante"
+              {...register('notes')}
+              placeholder="es. principiante, prima volta, attenzione particolare"
+            />
           </div>
         )}
 
@@ -362,90 +374,54 @@ export default function AddParticipantModal({
   );
 }
 
-function WalletSummary({
-  discipline, liftBalance, monetaryBalance,
-}: {
-  discipline: LiftDiscipline;
-  liftBalance?: LiftBalance;
-  monetaryBalance: number;
-}) {
-  const isInDebt = monetaryBalance < 0;
+function SubscriptionBanner({ icon, text, days }: { icon: React.ReactNode; text: string; days: number }) {
   return (
-    <div className="grid grid-cols-2 gap-3">
-      <div className={cn(
-        'p-3 rounded border',
-        liftBalance && liftBalance.lifts_remaining > 0
-          ? 'bg-emerald-500/5 border-emerald-500/30'
-          : 'bg-bg-elevated border-border'
+    <div className="p-2.5 rounded-md bg-accent/5 border border-accent/30 text-xs flex items-center gap-2">
+      <span className="text-accent">{icon}</span>
+      <span className="text-text flex-1">{text}</span>
+      <span className={cn(
+        'text-[10px]',
+        days < 14 ? 'text-amber-400' : 'text-text-muted'
       )}>
-        <div className="text-[10px] uppercase tracking-widest text-text-dim flex items-center gap-1">
-          <Wind className="h-3 w-3" />
-          Lift {DISCIPLINE_LABELS[discipline]}
-        </div>
-        <div className={cn(
-          'font-display text-2xl font-bold mt-1',
-          liftBalance && liftBalance.lifts_remaining > 0 ? 'text-emerald-400' : 'text-text-dim'
-        )}>
-          {liftBalance?.lifts_remaining || 0}
-        </div>
-      </div>
-      <div className={cn(
-        'p-3 rounded border',
-        isInDebt
-          ? 'bg-amber-500/5 border-amber-500/30'
-          : 'bg-bg-elevated border-border'
-      )}>
-        <div className="text-[10px] uppercase tracking-widest text-text-dim flex items-center gap-1">
-          <Euro className="h-3 w-3" />
-          {isInDebt ? 'Saldo debito' : 'Saldo monetario'}
-        </div>
-        <div className={cn(
-          'font-display text-2xl font-bold mt-1',
-          isInDebt ? 'text-amber-400' : 'text-text'
-        )}>
-          {isInDebt ? '-' : ''}€ {Math.abs(monetaryBalance).toFixed(2)}
-        </div>
-      </div>
+        {days} giorni
+      </span>
     </div>
   );
 }
 
-function BillingOption({
-  value, current, onChange, label, desc, disabled,
+function PreviewLine({
+  label, cost, covered,
 }: {
-  value: 'consume_package' | 'charge_paid' | 'charge_unpaid' | 'no_charge';
-  current: string;
-  onChange: (v: 'consume_package' | 'charge_paid' | 'charge_unpaid' | 'no_charge') => void;
   label: string;
-  desc: string;
-  disabled?: boolean;
+  cost: number;
+  covered: 'sub' | 'pkg' | 'paid' | 'pending';
 }) {
-  const selected = current === value;
   return (
-    <button
-      type="button"
-      onClick={() => !disabled && onChange(value)}
-      disabled={disabled}
-      className={cn(
-        'w-full text-left p-3 rounded border flex items-start gap-3 transition-colors',
-        selected
-          ? 'bg-accent/10 border-accent'
-          : 'bg-bg-elevated border-border hover:border-text-muted',
-        disabled && 'opacity-40 cursor-not-allowed'
-      )}
-    >
-      <div className={cn(
-        'w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5',
-        selected ? 'border-accent bg-accent' : 'border-border'
-      )}>
-        {selected && <Check className="h-2.5 w-2.5 text-bg" />}
+    <div className="flex items-center justify-between text-xs">
+      <span className="text-text">{label}</span>
+      <div className="flex items-center gap-2">
+        {covered === 'sub' && (
+          <span className="px-2 py-0.5 rounded bg-accent/10 text-accent text-[10px]">
+            abbonamento
+          </span>
+        )}
+        {covered === 'pkg' && (
+          <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[10px]">
+            scala da pacchetto
+          </span>
+        )}
+        {covered === 'pending' && (
+          <span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 text-[10px]">
+            addebito
+          </span>
+        )}
+        <span className={cn(
+          'font-display font-medium',
+          cost === 0 ? 'text-text-dim' : 'text-amber-400'
+        )}>
+          € {cost.toFixed(2)}
+        </span>
       </div>
-      <div className="flex-1">
-        <div className={cn('text-sm font-medium', selected ? 'text-accent' : 'text-text')}>
-          {label}
-        </div>
-        <div className="text-xs text-text-muted mt-0.5" dangerouslySetInnerHTML={{ __html: desc }} />
-      </div>
-    </button>
+    </div>
   );
 }

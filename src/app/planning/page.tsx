@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { getAuth } from '@/lib/auth';
 import PlanningView from './PlanningView';
 
 export const dynamic = 'force-dynamic';
@@ -12,9 +13,9 @@ export default async function PlanningPage({
   const today = new Date().toISOString().slice(0, 10);
   const date = queryDate || today;
 
+  const auth = await getAuth();
   const supabase = await createClient();
 
-  // Pre-load risorse statiche (barche, istruttori, soci, servizi)
   const [boatsRes, instructorsRes, membersRes, servicesRes] = await Promise.all([
     supabase.from('boats').select('*').eq('active', true).order('name'),
     supabase.from('instructors').select('*').eq('active', true).order('last_name'),
@@ -29,6 +30,7 @@ export default async function PlanningPage({
       instructors={instructorsRes.data || []}
       members={membersRes.data || []}
       services={servicesRes.data || []}
+      isAdmin={auth?.isAdmin || false}
     />
   );
 }

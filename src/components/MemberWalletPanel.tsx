@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import {
   Plus, Loader2, Wallet, Euro, Package as PackageIcon, Receipt,
   AlertCircle, CheckCircle2, ArrowDown, ArrowUp, ChevronDown, ChevronUp,
-  Wind, Banknote,
+  Wind, Banknote, Sparkles, Calendar,
 } from 'lucide-react';
 
 import {
@@ -16,7 +16,7 @@ import {
 import {
   type Service, type Package, type Movement, type MemberWallet,
   type LiftBalance, type ServiceCategory, type PaymentMethod, type LiftDiscipline,
-  type MovementType,
+  type MovementType, type ActiveSubscription,
   SERVICE_CATEGORY_LABELS, PAYMENT_METHOD_LABELS, DISCIPLINE_LABELS,
   MOVEMENT_TYPE_LABELS,
 } from '@/lib/types';
@@ -39,6 +39,7 @@ interface WalletData {
   lift_balances: LiftBalance[];
   packages: Package[];
   movements: Movement[];
+  active_subscriptions: ActiveSubscription[];
 }
 
 type ModalMode = null | 'package' | 'charge' | 'payment';
@@ -46,6 +47,7 @@ type ModalMode = null | 'package' | 'charge' | 'payment';
 export default function MemberWalletPanel({ memberId, services }: Props) {
   const [data, setData] = useState<WalletData>({
     wallet: null, lift_balances: [], packages: [], movements: [],
+    active_subscriptions: [],
   });
   const [loading, setLoading] = useState(true);
   const [modalMode, setModalMode] = useState<ModalMode>(null);
@@ -68,9 +70,9 @@ export default function MemberWalletPanel({ memberId, services }: Props) {
 
   const visibleMovements = showAllMovements ? data.movements : data.movements.slice(0, 8);
 
-  // Filtra pacchetti attivi (con lift residui)
-  const activePackages = data.packages.filter((p) => !p.is_exhausted);
-  const exhaustedPackages = data.packages.filter((p) => p.is_exhausted);
+  // Filtra pacchetti attivi (con lift residui), escludendo abbonamenti
+  const activePackages = data.packages.filter((p) => !p.is_exhausted && !p.is_subscription);
+  const exhaustedPackages = data.packages.filter((p) => p.is_exhausted && !p.is_subscription);
 
   return (
     <div className="space-y-6">
@@ -136,12 +138,57 @@ export default function MemberWalletPanel({ memberId, services }: Props) {
           </div>
         </div>
 
+        {/* Abbonamenti stagionali attivi */}
+        {data.active_subscriptions.length > 0 && (
+          <div className="p-5 border-b border-border">
+            <h3 className="text-[10px] uppercase tracking-widest text-text-dim font-medium mb-3 flex items-center gap-2">
+              <Sparkles className="h-3 w-3 text-accent" />
+              Abbonamenti stagionali attivi
+            </h3>
+            <div className="space-y-2">
+              {data.active_subscriptions.map((s) => (
+                <div
+                  key={s.package_id}
+                  className="p-3 rounded bg-accent/5 border border-accent/30"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Sparkles className="h-3.5 w-3.5 text-accent shrink-0" />
+                        <span className="font-medium text-sm text-text">
+                          {s.service_name_snapshot}
+                        </span>
+                        <span className="text-xs px-2 py-0.5 rounded bg-accent/10 text-accent">
+                          {DISCIPLINE_LABELS[s.discipline]} ∞
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-text-muted mt-1.5 flex items-center gap-1">
+                        <Calendar className="h-3 w-3" />
+                        Valido dal {formatDate(s.valid_from)} al {formatDate(s.valid_until)}
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className={cn(
+                        'text-xs font-medium',
+                        s.days_remaining < 14 ? 'text-amber-400' : 'text-accent'
+                      )}>
+                        {s.days_remaining} {s.days_remaining === 1 ? 'giorno' : 'giorni'}
+                      </div>
+                      <div className="text-[10px] text-text-dim">rimanenti</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Lift residui per disciplina */}
         {data.lift_balances.length > 0 && (
           <div className="p-5 border-b border-border">
             <h3 className="text-[10px] uppercase tracking-widest text-text-dim font-medium mb-3 flex items-center gap-2">
               <Wind className="h-3 w-3" />
-              Lift residui
+              Lift residui (pacchetti)
             </h3>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               {data.lift_balances.map((b) => {
@@ -413,6 +460,7 @@ function PurchasePackageModal({
 }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [seasonDefaults, setSeasonDefaults] = useState<{ valid_from: string; valid_until: string } | null>(null);
 
   const {
     register, handleSubmit, reset, watch, setValue, formState: { errors },
@@ -425,10 +473,18 @@ function PurchasePackageModal({
   const selectedService = services.find((s) => s.id === selectedServiceId);
   const paidNow = watch('paid_now');
 
+  // Se cambia il servizio e e' un abbonamento, pre-compila prezzo + date
   useEffect(() => {
-    if (selectedService) setValue('total_price', selectedService.unit_price);
-  }, [selectedServiceId, selectedService, setValue]);
+    if (selectedService) {
+      setValue('total_price', selectedService.unit_price);
+      if (selectedService.is_subscription && seasonDefaults) {
+        setValue('valid_from', seasonDefaults.valid_from);
+        setValue('valid_until', seasonDefaults.valid_until);
+      }
+    }
+  }, [selectedServiceId, selectedService, seasonDefaults, setValue]);
 
+  // Carica le date di stagione di default quando si apre il modale
   useEffect(() => {
     if (open) {
       reset({
@@ -436,9 +492,32 @@ function PurchasePackageModal({
         total_price: 0,
         paid_now: true,
         payment_method: 'contanti',
+        valid_from: '',
+        valid_until: '',
         notes: '',
       });
       setError(null);
+      // Calcola date stagione di default
+      fetch('/api/settings/stagione')
+        .then((r) => r.json())
+        .then((season: { start_month_day: string; end_month_day: string }) => {
+          const today = new Date();
+          const year = today.getFullYear();
+          const seasonStart = new Date(`${year}-${season.start_month_day}T00:00:00`);
+          const seasonEnd = new Date(`${year}-${season.end_month_day}T00:00:00`);
+          let validFrom: string, validUntil: string;
+          if (today > seasonEnd) {
+            validFrom = `${year + 1}-${season.start_month_day}`;
+            validUntil = `${year + 1}-${season.end_month_day}`;
+          } else {
+            validFrom = today < seasonStart
+              ? `${year}-${season.start_month_day}`
+              : today.toISOString().slice(0, 10);
+            validUntil = `${year}-${season.end_month_day}`;
+          }
+          setSeasonDefaults({ valid_from: validFrom, valid_until: validUntil });
+        })
+        .catch(() => null);
     }
   }, [open, reset]);
 
@@ -477,18 +556,21 @@ function PurchasePackageModal({
     <Modal
       open={open}
       onClose={onClose}
-      title="Acquista pacchetto"
-      description="Solo i servizi che includono lift sono mostrati"
+      title="Acquista pacchetto / abbonamento"
+      description="Pacchetti a lift o abbonamenti stagionali"
       size="lg"
     >
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
         <Select label="Pacchetto *" {...register('service_id')} error={errors.service_id?.message}>
-          <option value="">— Seleziona pacchetto —</option>
+          <option value="">— Seleziona —</option>
           {(Object.entries(grouped) as [ServiceCategory, Service[]][]).map(([cat, svcs]) => (
             <optgroup key={cat} label={SERVICE_CATEGORY_LABELS[cat]}>
               {svcs.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.name} ({s.included_lifts} lift {DISCIPLINE_LABELS[s.discipline]}) — €{Number(s.unit_price).toFixed(2)}
+                  {s.is_subscription
+                    ? `${s.name} (abbonamento ${DISCIPLINE_LABELS[s.discipline]}) — €${Number(s.unit_price).toFixed(2)}`
+                    : `${s.name} (${s.included_lifts} lift ${DISCIPLINE_LABELS[s.discipline]}) — €${Number(s.unit_price).toFixed(2)}`
+                  }
                 </option>
               ))}
             </optgroup>
@@ -496,15 +578,55 @@ function PurchasePackageModal({
         </Select>
 
         {selectedService && (
-          <div className="p-3 rounded bg-accent/5 border border-accent/20 text-xs space-y-1">
+          <div className={cn(
+            'p-3 rounded border text-xs space-y-1',
+            selectedService.is_subscription
+              ? 'bg-accent/5 border-accent/30'
+              : 'bg-bg-elevated border-border'
+          )}>
+            <div className="flex items-center gap-2">
+              {selectedService.is_subscription && <Sparkles className="h-3.5 w-3.5 text-accent" />}
+              <span className={cn(
+                'font-medium',
+                selectedService.is_subscription ? 'text-accent' : 'text-text'
+              )}>
+                {selectedService.is_subscription ? 'Abbonamento stagionale' : 'Pacchetto a lift'}
+              </span>
+            </div>
             <div>
               <span className="text-text-muted">Disciplina:</span>{' '}
-              <span className="text-accent font-medium">{DISCIPLINE_LABELS[selectedService.discipline]}</span>
+              <span className="text-text font-medium">{DISCIPLINE_LABELS[selectedService.discipline]}</span>
             </div>
-            <div>
-              <span className="text-text-muted">Lift inclusi:</span>{' '}
-              <span className="text-accent font-medium">{selectedService.included_lifts}</span>
-            </div>
+            {selectedService.is_subscription ? (
+              <div className="text-text-muted">
+                Lift illimitati nella finestra di validita. Nessun consumo nelle uscite.
+              </div>
+            ) : (
+              <div>
+                <span className="text-text-muted">Lift inclusi:</span>{' '}
+                <span className="text-accent font-medium">{selectedService.included_lifts}</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Date validita: solo per abbonamenti */}
+        {selectedService?.is_subscription && (
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Valido dal *"
+              type="date"
+              {...register('valid_from')}
+              error={errors.valid_from?.message}
+              hint="Default: oggi (o inizio stagione)"
+            />
+            <Input
+              label="Valido fino al *"
+              type="date"
+              {...register('valid_until')}
+              error={errors.valid_until?.message}
+              hint="Default: fine stagione"
+            />
           </div>
         )}
 
@@ -529,8 +651,10 @@ function PurchasePackageModal({
           )}
           {!paidNow && (
             <div className="p-3 rounded bg-amber-500/10 border border-amber-500/30 text-xs text-amber-400">
-              Il pacchetto sara creato e i lift saranno disponibili, ma il prezzo
-              risultera come debito da incassare.
+              {selectedService?.is_subscription
+                ? 'L\'abbonamento sara attivo, ma il prezzo risultera come debito da incassare.'
+                : 'Il pacchetto sara creato e i lift saranno disponibili, ma il prezzo risultera come debito da incassare.'
+              }
             </div>
           )}
         </div>
@@ -547,7 +671,7 @@ function PurchasePackageModal({
           <Button type="button" variant="ghost" onClick={onClose}>Annulla</Button>
           <Button type="submit" disabled={submitting}>
             {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            Crea pacchetto
+            {selectedService?.is_subscription ? 'Attiva abbonamento' : 'Crea pacchetto'}
           </Button>
         </div>
       </form>

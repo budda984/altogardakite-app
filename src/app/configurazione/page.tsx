@@ -11,6 +11,7 @@ import { Modal } from '@/components/Modal';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
+import SeasonSettingsCard from './SeasonSettingsCard';
 
 interface EnumGroup {
   key: string;
@@ -124,9 +125,11 @@ export default function ConfigurazionePage() {
           Configurazione
         </h1>
         <p className="text-sm text-text-muted mt-1">
-          Tipologie e categorie disponibili nel sistema
+          Tipologie, categorie e parametri di sistema
         </p>
       </div>
+
+      <SeasonSettingsCard />
 
       <div className="mb-8 p-4 rounded-lg border border-blue-500/30 bg-blue-500/5 flex gap-3">
         <Info className="h-5 w-5 text-blue-400 shrink-0 mt-0.5" />

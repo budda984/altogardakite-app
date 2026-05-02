@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
-  Plus, Pencil, Trash2, Loader2, Tag, Euro, EyeOff,
+  Plus, Pencil, Trash2, Loader2, Tag, Euro, EyeOff, Sparkles,
 } from 'lucide-react';
 
 import { createClient } from '@/lib/supabase/client';
@@ -42,7 +42,7 @@ export default function ServiziPage() {
     register, handleSubmit, reset, watch, setValue, formState: { errors },
   } = useForm<ServiceFormData>({
     resolver: zodResolver(serviceSchema),
-    defaultValues: { category: 'altro', is_active: true, included_lifts: 0, sort_order: 0 },
+    defaultValues: { category: 'altro', is_active: true, is_subscription: false, included_lifts: 0, sort_order: 0 },
   });
   const watchedName = watch('name');
 
@@ -75,6 +75,7 @@ export default function ServiziPage() {
     reset({
       slug: '', name: '', category: 'altro',
       unit_price: 0, included_lifts: 0,
+      is_subscription: false,
       description: '', is_active: true, sort_order: 0,
     });
     setShowModal(true);
@@ -89,6 +90,7 @@ export default function ServiziPage() {
       category: item.category,
       unit_price: item.unit_price,
       included_lifts: item.included_lifts,
+      is_subscription: item.is_subscription,
       description: item.description || '',
       is_active: item.is_active,
       sort_order: item.sort_order,
@@ -211,7 +213,13 @@ export default function ServiziPage() {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-3 flex-wrap">
                         <span className="font-medium text-text">{s.name}</span>
-                        {s.included_lifts > 0 && (
+                        {s.is_subscription && (
+                          <span className="text-xs px-2 py-0.5 rounded bg-accent/10 text-accent flex items-center gap-1">
+                            <Sparkles className="h-3 w-3" />
+                            Abbonamento
+                          </span>
+                        )}
+                        {!s.is_subscription && s.included_lifts > 0 && (
                           <span className="text-xs px-2 py-0.5 rounded bg-bg-elevated text-text-muted">
                             {s.included_lifts} lift
                           </span>
@@ -310,6 +318,17 @@ export default function ServiziPage() {
               {...register('sort_order')}
               hint="Numeri piu bassi = prima nell'elenco"
             />
+          </div>
+
+          <div className="p-3 rounded bg-bg-elevated border border-border space-y-2">
+            <Checkbox
+              label="È un abbonamento stagionale (lift illimitati nella finestra di validità)"
+              {...register('is_subscription')}
+            />
+            <p className="text-xs text-text-dim pl-6">
+              Spunta solo se il servizio è uno stagionale tipo &quot;Pacchetto lift stagionale kite&quot; o &quot;Storage stagionale&quot;.
+              Per gli abbonamenti i lift inclusi vengono ignorati: contano solo le date di validità.
+            </p>
           </div>
 
           <Textarea label="Descrizione" {...register('description')} />

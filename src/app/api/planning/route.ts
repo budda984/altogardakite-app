@@ -21,7 +21,8 @@ export async function GET(request: NextRequest) {
     const outingsPromise = supabase
       .from('outings')
       .select(`
-        *,
+        id, outing_date, boat_id, session_template_id, discipline, wind_session,
+        departure_time, return_time, weather_notes, notes, status, closed_at,
         boat:boats(id, name, boat_type, capacity),
         outing_instructors(instructor_id, role, instructor:instructors(id, first_name, last_name, role)),
         outing_participants(

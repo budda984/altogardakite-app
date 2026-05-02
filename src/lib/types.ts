@@ -263,6 +263,7 @@ export interface Service {
   unit_price: number;
   included_lifts: number;
   discipline: LiftDiscipline;
+  is_subscription: boolean;
   description: string | null;
   is_active: boolean;
   sort_order: number;
@@ -393,9 +394,23 @@ export interface Package {
   lifts_used: number;
   total_price: number;
   is_exhausted: boolean;
+  is_subscription: boolean;
+  valid_from: string | null;
+  valid_until: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface ActiveSubscription {
+  package_id: string;
+  member_id: string;
+  service_name_snapshot: string;
+  discipline: LiftDiscipline;
+  valid_from: string;
+  valid_until: string;
+  total_price: number;
+  days_remaining: number;
 }
 
 export interface Movement {
@@ -471,3 +486,13 @@ export interface SessionTemplate {
   created_at: string;
   updated_at: string;
 }
+
+// ============================================================================
+// OUTING STATUS
+// ============================================================================
+export type OutingStatus = 'bozza' | 'chiusa';
+
+export const OUTING_STATUS_LABELS: Record<OutingStatus, string> = {
+  bozza: 'Bozza',
+  chiusa: 'Chiusa',
+};

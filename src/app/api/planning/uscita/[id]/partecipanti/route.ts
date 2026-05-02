@@ -1,7 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getAuth } from '@/lib/auth';
-import { planningParticipantSchema } from '@/lib/validation/admin-schemas';
+import { z } from 'zod';
+
+// Versione semplificata: solo dati di base, niente billing immediato.
+// Gli addebiti partono alla chiusura dell'uscita.
+const addParticipantSchema = z.object({
+  member_id: z.string().uuid('Socio obbligatorio'),
+  participation_type: z.enum(['corso', 'lift_supervisionato', 'lift_semplice']).default('lift_semplice'),
+  rental_type: z.enum([
+    'nessuno', 'completo', 'solo_tavola', 'solo_kite', 'solo_barra',
+    'solo_trapezio', 'solo_muta', 'solo_giubbotto', 'wing_completo', 'altro',
+  ]).default('nessuno'),
+  rental_charge_amount: z.coerce.number().min(0).nullable().optional(),
+  notes: z.string().optional().or(z.literal('')),
+});
 
 export async function POST(
   request: NextRequest,
@@ -15,7 +28,7 @@ export async function POST(
     }
 
     const body = await request.json();
-    const parsed = planningParticipantSchema.safeParse(body);
+    const parsed = addParticipantSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
         { error: 'Dati non validi', issues: parsed.error.issues },
@@ -26,17 +39,22 @@ export async function POST(
     const supabase = await createClient();
     const data = parsed.data;
 
-    // Recupera outing per disciplina e date
+    // Verifica che l'uscita sia in bozza
     const { data: outing, error: outErr } = await supabase
       .from('outings')
-      .select('*, boats(name)')
+      .select('id, status')
       .eq('id', outingId)
       .single();
     if (outErr || !outing) {
       return NextResponse.json({ error: 'Uscita non trovata' }, { status: 404 });
     }
+    if (outing.status === 'chiusa') {
+      return NextResponse.json(
+        { error: 'L\'uscita e stata chiusa. Riaprila per modificare i partecipanti.' },
+        { status: 409 }
+      );
+    }
 
-    // Inserisci il participant
     const { data: participant, error: pErr } = await supabase
       .from('outing_participants')
       .insert({
@@ -44,6 +62,8 @@ export async function POST(
         member_id: data.member_id,
         participation_type: data.participation_type,
         rental_type: data.rental_type,
+        rental_charge_amount: data.rental_charge_amount ?? null,
+        notes: data.notes || null,
       })
       .select()
       .single();
@@ -51,82 +71,6 @@ export async function POST(
     if (pErr) {
       return NextResponse.json({ error: pErr.message }, { status: 500 });
     }
-
-    // Gestione fatturazione (billing_mode)
-    const discipline = outing.discipline || 'kite';
-
-    if (data.billing_mode === 'consume_package') {
-      // Consuma 1 lift dal pacchetto suggerito (FIFO) o da quello specifico
-      if (data.package_id) {
-        // Pacchetto specifico
-        const { data: pkg } = await supabase
-          .from('packages')
-          .select('*')
-          .eq('id', data.package_id)
-          .eq('member_id', data.member_id)
-          .single();
-        if (!pkg || pkg.is_exhausted) {
-          return NextResponse.json(
-            { error: 'Pacchetto selezionato non utilizzabile' },
-            { status: 400 }
-          );
-        }
-        await supabase
-          .from('packages')
-          .update({ lifts_used: pkg.lifts_used + 1 })
-          .eq('id', pkg.id);
-        await supabase.from('movements').insert({
-          member_id: data.member_id,
-          movement_type: 'consumo_lift',
-          description: `Consumo lift ${discipline} (${pkg.service_name_snapshot}) — uscita ${outing.boats?.name || ''}`,
-          amount: 0,
-          lift_delta: -1,
-          lift_discipline: discipline,
-          package_id: pkg.id,
-          outing_id: outingId,
-          created_by: auth.userId,
-        });
-      } else {
-        // FIFO via funzione SQL
-        const { data: pkgId, error: fnErr } = await supabase.rpc('consume_lift', {
-          p_member_id: data.member_id,
-          p_discipline: discipline,
-          p_outing_id: outingId,
-          p_notes: data.notes || null,
-        });
-        if (fnErr) {
-          return NextResponse.json({ error: fnErr.message }, { status: 500 });
-        }
-        if (!pkgId) {
-          return NextResponse.json(
-            { error: 'Nessun pacchetto disponibile per ' + discipline },
-            { status: 400 }
-          );
-        }
-      }
-    } else if (data.billing_mode === 'charge_unpaid' || data.billing_mode === 'charge_paid') {
-      const amount = Number(data.charge_amount || 0);
-      if (amount <= 0) {
-        return NextResponse.json(
-          { error: 'Importo da addebitare obbligatorio' },
-          { status: 400 }
-        );
-      }
-      const isPaid = data.billing_mode === 'charge_paid';
-      await supabase.from('movements').insert({
-        member_id: data.member_id,
-        movement_type: isPaid ? 'pagamento' : 'addebito',
-        description: `Lift ${discipline} (uscita ${outing.boats?.name || ''})`,
-        amount: isPaid ? amount : -amount,
-        lift_delta: 0,
-        outing_id: outingId,
-        paid: isPaid,
-        payment_method: isPaid ? data.payment_method : null,
-        notes: data.notes || null,
-        created_by: auth.userId,
-      });
-    }
-    // billing_mode === 'no_charge': non fa nulla in piu'
 
     return NextResponse.json(participant, { status: 201 });
   } catch (e) {
@@ -154,6 +98,21 @@ export async function DELETE(
     }
 
     const supabase = await createClient();
+
+    // Verifica stato uscita
+    const { data: outing } = await supabase
+      .from('outings')
+      .select('status')
+      .eq('id', outingId)
+      .single();
+
+    if (outing?.status === 'chiusa') {
+      return NextResponse.json(
+        { error: 'L\'uscita e chiusa. Riaprila prima di rimuovere partecipanti.' },
+        { status: 409 }
+      );
+    }
+
     const { error } = await supabase
       .from('outing_participants')
       .delete()
