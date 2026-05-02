@@ -154,14 +154,14 @@ export const chargeServiceSchema = z.object({
 export type ChargeServiceFormData = z.infer<typeof chargeServiceSchema>;
 
 // ============================================================================
-// WALLET: pagamento (chiude debiti)
+// WALLET: salda uno o piu' debiti specifici
 // ============================================================================
-export const paymentSchema = z.object({
-  amount: z.coerce.number().positive('Importo deve essere maggiore di zero'),
+export const settleDebtsSchema = z.object({
+  movement_ids: z.array(z.string().uuid()).min(1, 'Seleziona almeno un debito'),
   payment_method: z.enum(['contanti', 'bancomat', 'bonifico', 'altro']),
   notes: z.string().optional().or(z.literal('')),
 });
-export type PaymentFormData = z.infer<typeof paymentSchema>;
+export type SettleDebtsFormData = z.infer<typeof settleDebtsSchema>;
 
 // ============================================================================
 // WALLET: consumo lift manuale (collegato a uscita)

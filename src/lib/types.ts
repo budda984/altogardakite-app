@@ -304,18 +304,6 @@ export interface EquipmentTransaction {
   created_at: string;
 }
 
-export interface MemberBalance {
-  member_id: string;
-  first_name: string;
-  last_name: string;
-  membership_number: number;
-  total_charged: number;
-  total_paid: number;
-  total_outstanding: number;
-  services_count: number;
-  unpaid_count: number;
-}
-
 export const SERVICE_CATEGORY_LABELS: Record<ServiceCategory, string> = {
   lift_singolo: 'Lift singoli',
   lift_pacchetto: 'Pacchetti lift',
@@ -437,10 +425,24 @@ export interface MemberWallet {
   first_name: string;
   last_name: string;
   membership_number: number;
-  monetary_balance: number; // positivo: a credito, negativo: deve soldi
-  total_received: number;
   total_outstanding: number;
+  open_debts_count: number;
+  total_received: number;
   movements_count: number;
+}
+
+export interface OpenDebt {
+  movement_id: string;
+  member_id: string;
+  movement_date: string;
+  description: string;
+  amount_due: number;
+  outing_id: string | null;
+  participant_id: string | null;
+  notes: string | null;
+  outing_date: string | null;
+  outing_discipline: LiftDiscipline | null;
+  boat_name: string | null;
 }
 
 export interface LiftBalance {
