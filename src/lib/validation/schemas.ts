@@ -25,6 +25,9 @@ export const memberSchema = z.object({
   city: z.string().min(1, 'Citta obbligatoria'),
   cap: z.string().regex(/^\d{5}$/, 'CAP non valido'),
 
+  // Modulo cartaceo gia firmato (salta firme digitali)
+  paper_form_signed: z.boolean().default(false),
+
   // Minore
   is_minor: z.boolean(),
   parent_first_name: z.string().optional().or(z.literal('')),
@@ -39,29 +42,28 @@ export const memberSchema = z.object({
   parent_phone: z.string().optional().or(z.literal('')),
   parent_email: z.string().email().optional().or(z.literal('')),
 
-  // Dichiarazioni
-  statute_accepted: requiredConsent('Accettazione statuto obbligatoria'),
-  medical_certificate: requiredConsent('Certificato medico obbligatorio'),
-  payment_commitment: requiredConsent('Impegno pagamento obbligatorio'),
+  // Dichiarazioni (auto-true se paper_form_signed)
+  statute_accepted: z.boolean(),
+  medical_certificate: z.boolean(),
+  payment_commitment: z.boolean(),
   photo_authorization: z.boolean(),
-  navigation_rules_accepted: requiredConsent('Accettazione regole navigazione obbligatoria'),
-  safeguarding_acknowledged: requiredConsent('Presa visione safeguarding obbligatoria'),
+  navigation_rules_accepted: z.boolean(),
+  safeguarding_acknowledged: z.boolean(),
 
   // GDPR
-  gdpr_consent_1a: requiredConsent('Consenso GDPR finalita istituzionali obbligatorio'),
+  gdpr_consent_1a: z.boolean(),
   gdpr_consent_1b: z.boolean(),
 
-  // Firme - obbligatorie
-  signature_admission: z.string().min(100, 'Firma domanda ammissione obbligatoria'),
-  signature_navigation: z.string().min(100, 'Firma informativa navigazione obbligatoria'),
-  signature_safeguarding: z.string().min(100, 'Firma safeguarding obbligatoria'),
-  signature_gdpr_1a: z.string().min(100, 'Firma consenso GDPR 1a obbligatoria'),
+  // Firme - obbligatorie SOLO se non paper_form_signed
+  signature_admission: z.string().optional().or(z.literal('')),
+  signature_navigation: z.string().optional().or(z.literal('')),
+  signature_safeguarding: z.string().optional().or(z.literal('')),
+  signature_gdpr_1a: z.string().optional().or(z.literal('')),
   signature_gdpr_1b: z.string().optional().or(z.literal('')),
 
   notes: z.string().optional().or(z.literal('')),
 }).refine(
   (data) => {
-    // Se minore, dati genitore obbligatori
     if (data.is_minor) {
       return !!(
         data.parent_first_name &&
@@ -72,10 +74,30 @@ export const memberSchema = z.object({
     }
     return true;
   },
-  {
-    message: 'Per i minori sono obbligatori i dati del genitore esercente la potesta',
-    path: ['parent_first_name'],
-  }
+  { message: 'Per i minori sono obbligatori i dati del genitore esercente la potesta', path: ['parent_first_name'] }
+).refine(
+  (data) => {
+    // Se NON cartaceo: tutte le dichiarazioni obbligatorie devono essere true
+    if (!data.paper_form_signed) {
+      return data.statute_accepted && data.medical_certificate &&
+             data.payment_commitment && data.navigation_rules_accepted &&
+             data.safeguarding_acknowledged && data.gdpr_consent_1a;
+    }
+    return true;
+  },
+  { message: 'Tutte le dichiarazioni obbligatorie vanno spuntate', path: ['statute_accepted'] }
+).refine(
+  (data) => {
+    // Se NON cartaceo: firme obbligatorie
+    if (!data.paper_form_signed) {
+      return (data.signature_admission?.length || 0) > 100 &&
+             (data.signature_navigation?.length || 0) > 100 &&
+             (data.signature_safeguarding?.length || 0) > 100 &&
+             (data.signature_gdpr_1a?.length || 0) > 100;
+    }
+    return true;
+  },
+  { message: 'Tutte le firme obbligatorie vanno apposte', path: ['signature_admission'] }
 );
 
 export type MemberFormData = z.infer<typeof memberSchema>;

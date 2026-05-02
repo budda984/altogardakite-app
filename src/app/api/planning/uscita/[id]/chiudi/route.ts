@@ -40,12 +40,17 @@ export async function POST(
       if (svc) rentalPrices[rt] = Number(svc.unit_price);
     }
 
+    // Prezzo lezione singola
+    const lessonSvc = svcs.find((s) => s.slug === 'lezione_singola');
+    const lessonPrice = lessonSvc ? Number(lessonSvc.unit_price) : 60;
+
     // Esegui la function SQL atomica
     const { data: result, error } = await supabase.rpc('close_outing', {
       p_outing_id: outingId,
       p_closed_by: auth.userId,
       p_lift_prices: liftPrices,
       p_rental_prices: rentalPrices,
+      p_lesson_price: lessonPrice,
     });
 
     if (error) {

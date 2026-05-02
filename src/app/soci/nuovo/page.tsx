@@ -42,6 +42,7 @@ export default function NewMemberPage() {
     resolver: zodResolver(memberSchema),
     defaultValues: {
       is_minor: false,
+      paper_form_signed: false,
       statute_accepted: false,
       medical_certificate: false,
       payment_commitment: false,
@@ -55,6 +56,7 @@ export default function NewMemberPage() {
 
   const birthDate = watch('birth_date');
   const isMinorWatch = watch('is_minor');
+  const paperSigned = watch('paper_form_signed');
 
   // Auto-detect minore quando cambia data nascita
   if (birthDate && isMinor(birthDate) !== isMinorWatch) {
@@ -74,10 +76,32 @@ export default function NewMemberPage() {
     };
     const fields = fieldsBySection[section] || [];
     const isValid = await trigger(fields);
-    if (isValid) setSection((s) => Math.min(6, s + 1));
+    if (!isValid) return;
+
+    // Se cartaceo: dopo l'anagrafica salta direttamente a "Conferma" (6),
+    // popolando le dichiarazioni obbligatorie come true.
+    if (section === 1 && paperSigned) {
+      setValue('statute_accepted', true);
+      setValue('medical_certificate', true);
+      setValue('payment_commitment', true);
+      setValue('navigation_rules_accepted', true);
+      setValue('safeguarding_acknowledged', true);
+      setValue('gdpr_consent_1a', true);
+      setSection(6);
+      return;
+    }
+
+    setSection((s) => Math.min(6, s + 1));
   };
 
-  const goBack = () => setSection((s) => Math.max(1, s - 1));
+  const goBack = () => {
+    // Se cartaceo e siamo a step 6, torna direttamente a 1
+    if (section === 6 && paperSigned) {
+      setSection(1);
+      return;
+    }
+    setSection((s) => Math.max(1, s - 1));
+  };
 
   const onSubmit = async (data: MemberFormData) => {
     setSubmitting(true);
@@ -147,6 +171,23 @@ export default function NewMemberPage() {
         {/* SECTION 1: Anagrafica */}
         {section === 1 && (
           <>
+            {/* Toggle: cliente ha firmato cartaceo */}
+            <Card
+              title="Modulo cartaceo gia firmato?"
+              description="Se il cliente ha gia compilato e firmato il modulo cartaceo, puoi inserire solo l'anagrafica e saltare le firme digitali."
+            >
+              <Checkbox
+                label="Si, il cliente ha firmato il modulo cartaceo. Salta firme e dichiarazioni digitali."
+                {...register('paper_form_signed')}
+              />
+              {paperSigned && (
+                <div className="mt-3 p-3 rounded bg-accent/10 border border-accent/30 text-xs text-accent">
+                  Compila solo l&apos;anagrafica qui sotto. Al click su &quot;Avanti&quot; salterai
+                  direttamente alla conferma. <strong>Conserva il modulo cartaceo firmato</strong> agli atti del Circolo.
+                </div>
+              )}
+            </Card>
+
             <Card title="Dati anagrafici" description="Dati del richiedente">
               <div className="grid md:grid-cols-2 gap-4">
                 <Input label="Nome" required {...register('first_name')} error={errors.first_name?.message} />

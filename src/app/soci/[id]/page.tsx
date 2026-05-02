@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { formatDate, calcAge } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import MemberWalletPanel from '@/components/MemberWalletPanel';
+import EditMemberButton from '@/components/EditMemberButton';
 
 export default async function MemberDetailPage({
   params,
@@ -66,12 +67,17 @@ export default async function MemberDetailPage({
       )}
 
       <header className="mb-8">
-        <div className="text-xs uppercase tracking-widest text-text-dim mb-1">
-          Socio #{member.membership_number}
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <div className="text-xs uppercase tracking-widest text-text-dim mb-1">
+              Socio #{member.membership_number}
+            </div>
+            <h1 className="font-display text-3xl lg:text-4xl font-bold tracking-tightest">
+              {member.first_name} {member.last_name}
+            </h1>
+          </div>
+          <EditMemberButton member={member} />
         </div>
-        <h1 className="font-display text-3xl lg:text-4xl font-bold tracking-tightest">
-          {member.first_name} {member.last_name}
-        </h1>
         <div className="flex flex-wrap gap-4 mt-3 text-sm text-text-muted">
           <span className="flex items-center gap-1.5">
             <Calendar className="h-4 w-4" />

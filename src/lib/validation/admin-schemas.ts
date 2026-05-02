@@ -154,6 +154,24 @@ export const chargeServiceSchema = z.object({
 export type ChargeServiceFormData = z.infer<typeof chargeServiceSchema>;
 
 // ============================================================================
+// MEMBER EDIT (modifica anagrafica)
+// ============================================================================
+export const memberEditSchema = z.object({
+  first_name: z.string().min(1, 'Nome obbligatorio').max(100),
+  last_name: z.string().min(1, 'Cognome obbligatorio').max(100),
+  email: z.string().email('Email non valida').optional().or(z.literal('')),
+  phone: z.string().optional().or(z.literal('')),
+  address_street: z.string().optional().or(z.literal('')),
+  address_number: z.string().optional().or(z.literal('')),
+  city: z.string().optional().or(z.literal('')),
+  cap: z.string().optional().or(z.literal('')),
+  birth_province: z.string().optional().or(z.literal('')),
+  fiscal_code: z.string().optional().or(z.literal('')),
+  notes: z.string().optional().or(z.literal('')),
+});
+export type MemberEditFormData = z.infer<typeof memberEditSchema>;
+
+// ============================================================================
 // WALLET: salda uno o piu' debiti specifici
 // ============================================================================
 export const settleDebtsSchema = z.object({
