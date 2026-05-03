@@ -11,8 +11,8 @@ import {
 } from 'lucide-react';
 
 import {
-  purchasePackageSchema, chargeServiceSchema, settleDebtsSchema,
-  type PurchasePackageFormData, type ChargeServiceFormData, type SettleDebtsFormData,
+  settleDebtsSchema,
+  type SettleDebtsFormData,
 } from '@/lib/validation/admin-schemas';
 import {
   type Service, type Package, type Movement, type MemberWallet,
@@ -44,7 +44,7 @@ interface WalletData {
   open_debts: OpenDebt[];
 }
 
-type ModalMode = null | 'package' | 'charge' | 'settle';
+type ModalMode = null | 'sell' | 'settle';
 
 export default function MemberWalletPanel({ memberId, services }: Props) {
   const [data, setData] = useState<WalletData>({
@@ -81,13 +81,9 @@ export default function MemberWalletPanel({ memberId, services }: Props) {
               Wallet del socio
             </h2>
             <div className="flex flex-wrap gap-2">
-              <Button size="sm" variant="secondary" onClick={() => setModalMode('package')}>
+              <Button size="sm" variant="secondary" onClick={() => setModalMode('sell')}>
                 <PackageIcon className="h-3.5 w-3.5 mr-1.5" />
-                Vendi pacchetto / abbonamento
-              </Button>
-              <Button size="sm" variant="secondary" onClick={() => setModalMode('charge')}>
-                <Plus className="h-3.5 w-3.5 mr-1.5" />
-                Addebito singolo
+                Registra acquisto
               </Button>
               {outstanding > 0 && (
                 <Button size="sm" onClick={() => setModalMode('settle')}>
@@ -330,18 +326,11 @@ export default function MemberWalletPanel({ memberId, services }: Props) {
         </div>
       </div>
 
-      <PurchasePackageModal
-        open={modalMode === 'package'}
+      <SellModal
+        open={modalMode === 'sell'}
         onClose={() => setModalMode(null)}
         memberId={memberId}
-        services={services.filter((s) => (s.included_lifts > 0 || s.is_subscription) && s.is_active)}
-        onSuccess={load}
-      />
-      <ChargeServiceModal
-        open={modalMode === 'charge'}
-        onClose={() => setModalMode(null)}
-        memberId={memberId}
-        services={services.filter((s) => s.is_active && !s.is_subscription)}
+        services={services.filter((s) => s.is_active)}
         onSuccess={load}
       />
       <SettleDebtsModal
@@ -430,9 +419,9 @@ function MovementRow({ movement }: { movement: Movement }) {
 }
 
 // ============================================================================
-// PURCHASE PACKAGE MODAL
+// SELL MODAL — UNIFIED: pacchetti, abbonamenti e vendite una tantum
 // ============================================================================
-function PurchasePackageModal({
+function SellModal({
   open, onClose, memberId, services, onSuccess,
 }: {
   open: boolean;
@@ -444,35 +433,40 @@ function PurchasePackageModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [seasonDefaults, setSeasonDefaults] = useState<{ valid_from: string; valid_until: string } | null>(null);
+  const [selectedServiceId, setSelectedServiceId] = useState('');
+  const [totalPrice, setTotalPrice] = useState(0);
+  const [quantity, setQuantity] = useState(1);
+  const [paidNow, setPaidNow] = useState(true);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('contanti');
+  const [validFrom, setValidFrom] = useState('');
+  const [validUntil, setValidUntil] = useState('');
+  const [notes, setNotes] = useState('');
+  const [search, setSearch] = useState('');
 
-  const {
-    register, handleSubmit, reset, watch, setValue, formState: { errors },
-  } = useForm<PurchasePackageFormData>({
-    resolver: zodResolver(purchasePackageSchema),
-    defaultValues: { paid_now: true, payment_method: 'contanti' },
-  });
-
-  const selectedServiceId = watch('service_id');
   const selectedService = services.find((s) => s.id === selectedServiceId);
-  const paidNow = watch('paid_now');
 
-  useEffect(() => {
-    if (selectedService) {
-      setValue('total_price', selectedService.unit_price);
-      if (selectedService.is_subscription && seasonDefaults) {
-        setValue('valid_from', seasonDefaults.valid_from);
-        setValue('valid_until', seasonDefaults.valid_until);
-      }
-    }
-  }, [selectedServiceId, selectedService, seasonDefaults, setValue]);
+  // Categorizzazione automatica: il servizio crea un pacchetto vero o e' una vendita una tantum?
+  const kind: 'package' | 'subscription' | 'oneoff' | null = !selectedService
+    ? null
+    : selectedService.is_subscription
+      ? 'subscription'
+      : selectedService.included_lifts > 1
+        ? 'package'
+        : 'oneoff';
 
   useEffect(() => {
     if (open) {
-      reset({
-        service_id: '', total_price: 0, paid_now: true, payment_method: 'contanti',
-        valid_from: '', valid_until: '', notes: '',
-      });
+      setSelectedServiceId('');
+      setTotalPrice(0);
+      setQuantity(1);
+      setPaidNow(true);
+      setPaymentMethod('contanti');
+      setValidFrom('');
+      setValidUntil('');
+      setNotes('');
+      setSearch('');
       setError(null);
+      // Carica date stagione di default
       fetch('/api/settings/stagione')
         .then((r) => r.json())
         .then((season: { start_month_day: string; end_month_day: string }) => {
@@ -480,40 +474,89 @@ function PurchasePackageModal({
           const year = today.getFullYear();
           const seasonStart = new Date(`${year}-${season.start_month_day}T00:00:00`);
           const seasonEnd = new Date(`${year}-${season.end_month_day}T00:00:00`);
-          let validFrom: string, validUntil: string;
+          let vf: string, vu: string;
           if (today > seasonEnd) {
-            validFrom = `${year + 1}-${season.start_month_day}`;
-            validUntil = `${year + 1}-${season.end_month_day}`;
+            vf = `${year + 1}-${season.start_month_day}`;
+            vu = `${year + 1}-${season.end_month_day}`;
           } else {
-            validFrom = today < seasonStart
-              ? `${year}-${season.start_month_day}`
-              : today.toISOString().slice(0, 10);
-            validUntil = `${year}-${season.end_month_day}`;
+            vf = today < seasonStart ? `${year}-${season.start_month_day}` : today.toISOString().slice(0, 10);
+            vu = `${year}-${season.end_month_day}`;
           }
-          setSeasonDefaults({ valid_from: validFrom, valid_until: validUntil });
+          setSeasonDefaults({ valid_from: vf, valid_until: vu });
         })
         .catch(() => null);
     }
-  }, [open, reset]);
+  }, [open]);
 
+  // Quando si seleziona un servizio, precarica prezzo e (se abbonamento) date
+  useEffect(() => {
+    if (!selectedService) return;
+    setTotalPrice(Number(selectedService.unit_price));
+    setQuantity(1);
+    if (selectedService.is_subscription && seasonDefaults) {
+      setValidFrom(seasonDefaults.valid_from);
+      setValidUntil(seasonDefaults.valid_until);
+    }
+  }, [selectedServiceId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Filtra servizi per ricerca
+  const filteredServices = useMemo(() => {
+    const q = search.toLowerCase().trim();
+    if (!q) return services;
+    return services.filter(
+      (s) =>
+        s.name.toLowerCase().includes(q) ||
+        s.slug.toLowerCase().includes(q) ||
+        SERVICE_CATEGORY_LABELS[s.category].toLowerCase().includes(q)
+    );
+  }, [services, search]);
+
+  // Raggruppamento per categoria
   const grouped = useMemo(() => {
     const map: Record<string, Service[]> = {};
-    services.forEach((s) => {
+    filteredServices.forEach((s) => {
       if (!map[s.category]) map[s.category] = [];
       map[s.category].push(s);
     });
     return map;
-  }, [services]);
+  }, [filteredServices]);
 
-  const onSubmit = async (data: PurchasePackageFormData) => {
+  const handleSubmit = async () => {
+    if (!selectedService) return;
     setSubmitting(true);
     setError(null);
     try {
-      const res = await fetch(`/api/soci/${memberId}/pacchetti`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
+      let res: Response;
+      if (kind === 'package' || kind === 'subscription') {
+        // Crea un pacchetto vero (lift scalano in automatico)
+        res = await fetch(`/api/soci/${memberId}/pacchetti`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            service_id: selectedService.id,
+            total_price: totalPrice,
+            paid_now: paidNow,
+            payment_method: paidNow ? paymentMethod : null,
+            valid_from: kind === 'subscription' ? validFrom : '',
+            valid_until: kind === 'subscription' ? validUntil : '',
+            notes,
+          }),
+        });
+      } else {
+        // Vendita una tantum (lift singolo, lezione singola, noleggio sciolto, ecc.)
+        res = await fetch(`/api/soci/${memberId}/addebito`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            service_id: selectedService.id,
+            quantity,
+            unit_price: totalPrice / quantity,
+            paid_now: paidNow,
+            payment_method: paidNow ? paymentMethod : null,
+            notes,
+          }),
+        });
+      }
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
         throw new Error(j.error || 'Errore salvataggio');
@@ -531,93 +574,194 @@ function PurchasePackageModal({
     <Modal
       open={open}
       onClose={onClose}
-      title="Vendi pacchetto / abbonamento"
-      description="Pacchetti a lift o abbonamenti stagionali"
+      title="Registra acquisto"
+      description="Pacchetti, abbonamenti, lift singoli, noleggi, vendite extra"
       size="lg"
     >
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-        <Select label="Pacchetto *" {...register('service_id')} error={errors.service_id?.message}>
-          <option value="">— Seleziona —</option>
-          {(Object.entries(grouped) as [ServiceCategory, Service[]][]).map(([cat, svcs]) => (
-            <optgroup key={cat} label={SERVICE_CATEGORY_LABELS[cat]}>
-              {svcs.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.is_subscription
-                    ? `${s.name} (abbonamento ${DISCIPLINE_LABELS[s.discipline]}) — €${Number(s.unit_price).toFixed(2)}`
-                    : `${s.name} (${s.included_lifts} lift ${DISCIPLINE_LABELS[s.discipline]}) — €${Number(s.unit_price).toFixed(2)}`
-                  }
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </Select>
-
-        {selectedService && (
-          <div className={cn(
-            'p-3 rounded border text-xs space-y-1',
-            selectedService.is_subscription
-              ? 'bg-accent/5 border-accent/30'
-              : 'bg-bg-elevated border-border'
-          )}>
-            <div className="flex items-center gap-2">
-              {selectedService.is_subscription && <Sparkles className="h-3.5 w-3.5 text-accent" />}
-              <span className={cn('font-medium', selectedService.is_subscription ? 'text-accent' : 'text-text')}>
-                {selectedService.is_subscription ? 'Abbonamento stagionale' : 'Pacchetto a lift'}
-              </span>
+      <div className="space-y-5">
+        {/* STEP 1: scelta servizio */}
+        {!selectedService ? (
+          <div>
+            <label className="block text-sm font-medium text-text mb-2">
+              Cerca o seleziona dal listino *
+            </label>
+            <input
+              type="text"
+              placeholder="Cerca per nome o categoria..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full px-3 py-2.5 mb-3 rounded-md border border-border bg-bg-elevated text-sm text-text placeholder:text-text-dim focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent"
+              autoFocus
+            />
+            <div className="max-h-96 overflow-y-auto bg-bg-elevated border border-border rounded">
+              {Object.keys(grouped).length === 0 ? (
+                <p className="p-3 text-sm text-text-muted text-center">Nessun servizio trovato.</p>
+              ) : (
+                Object.entries(grouped).map(([cat, svcs]) => (
+                  <div key={cat}>
+                    <div className="px-3 py-1.5 bg-bg/50 text-[10px] uppercase tracking-widest text-text-dim font-medium border-b border-border">
+                      {SERVICE_CATEGORY_LABELS[cat as ServiceCategory]}
+                    </div>
+                    {svcs.map((s) => {
+                      const isSub = s.is_subscription;
+                      const isPkg = !isSub && s.included_lifts > 1;
+                      return (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => setSelectedServiceId(s.id)}
+                          className="w-full p-3 text-left hover:bg-bg-surface border-b border-border last:border-b-0"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="text-sm text-text font-medium flex items-center gap-2 flex-wrap">
+                                <span>{s.name}</span>
+                                {isSub && (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent/10 text-accent flex items-center gap-1">
+                                    <Sparkles className="h-2.5 w-2.5" />
+                                    abbonamento
+                                  </span>
+                                )}
+                                {isPkg && (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400">
+                                    {s.included_lifts} lift
+                                  </span>
+                                )}
+                                {!isSub && !isPkg && (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-bg-elevated text-text-muted">
+                                    una tantum
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[10px] text-text-dim mt-0.5">
+                                {DISCIPLINE_LABELS[s.discipline]}
+                                {isSub && ' · lift illimitati nella stagione'}
+                                {isPkg && ' · scalati uno a uno alle uscite'}
+                                {!isSub && !isPkg && ' · solo addebito, niente da scalare'}
+                              </div>
+                            </div>
+                            <div className="font-display font-semibold text-text shrink-0">
+                              € {Number(s.unit_price).toFixed(2)}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ))
+              )}
             </div>
-            <div>
-              <span className="text-text-muted">Disciplina:</span>{' '}
-              <span className="text-text font-medium">{DISCIPLINE_LABELS[selectedService.discipline]}</span>
-            </div>
-            {selectedService.is_subscription ? (
-              <div className="text-text-muted">
-                Lift illimitati nella finestra di validità. Nessun consumo nelle uscite.
+          </div>
+        ) : (
+          <>
+            {/* STEP 2: parametri */}
+            <div className={cn(
+              'p-3 rounded border flex items-start gap-3',
+              kind === 'subscription'
+                ? 'bg-accent/5 border-accent/30'
+                : kind === 'package'
+                  ? 'bg-emerald-500/5 border-emerald-500/30'
+                  : 'bg-bg-elevated border-border'
+            )}>
+              <div className="min-w-0 flex-1">
+                <div className="font-medium text-sm text-text">{selectedService.name}</div>
+                <div className="text-[10px] text-text-muted mt-0.5">
+                  {kind === 'subscription' && (
+                    <>
+                      <Sparkles className="inline h-3 w-3 text-accent mr-1" />
+                      Abbonamento stagionale ({DISCIPLINE_LABELS[selectedService.discipline]}) — lift illimitati
+                    </>
+                  )}
+                  {kind === 'package' && (
+                    <>
+                      Pacchetto {selectedService.included_lifts} lift {DISCIPLINE_LABELS[selectedService.discipline]}
+                      — si scalano automaticamente
+                    </>
+                  )}
+                  {kind === 'oneoff' && (
+                    <>Vendita una tantum — solo addebito contabile</>
+                  )}
+                </div>
               </div>
-            ) : (
-              <div>
-                <span className="text-text-muted">Lift inclusi:</span>{' '}
-                <span className="text-accent font-medium">{selectedService.included_lifts}</span>
-                {' '}(si scalano una alla volta)
+              <button
+                type="button"
+                onClick={() => setSelectedServiceId('')}
+                className="text-xs text-accent hover:underline shrink-0"
+              >
+                Cambia
+              </button>
+            </div>
+
+            {/* Campo quantità solo per le una tantum */}
+            {kind === 'oneoff' && (
+              <Input
+                label="Quantità"
+                type="number"
+                min={1}
+                value={quantity}
+                onChange={(e) => setQuantity(Math.max(1, Number(e.target.value) || 1))}
+                hint={`Verra' addebitato ${quantity} × € ${(totalPrice / quantity).toFixed(2)} = € ${(totalPrice).toFixed(2)}`}
+              />
+            )}
+
+            {kind === 'subscription' && (
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  label="Valido dal *"
+                  type="date"
+                  value={validFrom}
+                  onChange={(e) => setValidFrom(e.target.value)}
+                />
+                <Input
+                  label="Valido fino al *"
+                  type="date"
+                  value={validUntil}
+                  onChange={(e) => setValidUntil(e.target.value)}
+                />
               </div>
             )}
-          </div>
-        )}
 
-        {selectedService?.is_subscription && (
-          <div className="grid grid-cols-2 gap-4">
-            <Input label="Valido dal *" type="date" {...register('valid_from')} error={errors.valid_from?.message} hint="Default: oggi (o inizio stagione)" />
-            <Input label="Valido fino al *" type="date" {...register('valid_until')} error={errors.valid_until?.message} hint="Default: fine stagione" />
-          </div>
-        )}
+            <Input
+              label="Prezzo totale €"
+              type="number"
+              step="0.01"
+              min={0}
+              value={totalPrice}
+              onChange={(e) => setTotalPrice(Number(e.target.value) || 0)}
+              hint="Modificabile per sconti o personalizzazioni"
+            />
 
-        <Input
-          label="Prezzo totale €"
-          type="number" step="0.01" min={0}
-          {...register('total_price')}
-          error={errors.total_price?.message}
-          hint="Modificabile per sconti"
-        />
-
-        <div className="space-y-3">
-          <Checkbox label="Pagato subito" {...register('paid_now')} />
-          {paidNow && (
-            <Select label="Metodo pagamento" {...register('payment_method')}>
-              {(Object.keys(PAYMENT_METHOD_LABELS) as PaymentMethod[]).map((m) => (
-                <option key={m} value={m}>{PAYMENT_METHOD_LABELS[m]}</option>
-              ))}
-            </Select>
-          )}
-          {!paidNow && (
-            <div className="p-3 rounded bg-amber-500/10 border border-amber-500/30 text-xs text-amber-400">
-              {selectedService?.is_subscription
-                ? 'L\'abbonamento sarà attivo, ma il prezzo risulterà come debito da incassare.'
-                : 'Il pacchetto sarà creato e i lift saranno disponibili, ma il prezzo risulterà come debito da incassare.'
-              }
+            <div className="space-y-3">
+              <Checkbox
+                label="Pagato subito"
+                checked={paidNow}
+                onChange={(e) => setPaidNow(e.target.checked)}
+              />
+              {paidNow ? (
+                <Select
+                  label="Metodo pagamento"
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
+                >
+                  {(Object.keys(PAYMENT_METHOD_LABELS) as PaymentMethod[]).map((m) => (
+                    <option key={m} value={m}>{PAYMENT_METHOD_LABELS[m]}</option>
+                  ))}
+                </Select>
+              ) : (
+                <div className="p-3 rounded bg-amber-500/10 border border-amber-500/30 text-xs text-amber-400">
+                  {kind === 'subscription'
+                    ? 'L\'abbonamento sarà attivo, ma il prezzo risulterà come debito da incassare.'
+                    : kind === 'package'
+                      ? 'Il pacchetto sarà creato e i lift saranno disponibili, ma il prezzo risulterà come debito da incassare.'
+                      : 'L\'acquisto verrà registrato come debito non pagato.'
+                  }
+                </div>
+              )}
             </div>
-          )}
-        </div>
 
-        <Textarea label="Note" {...register('notes')} />
+            <Textarea label="Note" value={notes} onChange={(e) => setNotes(e.target.value)} />
+          </>
+        )}
 
         {error && (
           <div className="p-3 rounded bg-red-500/10 border border-red-500/30 text-sm text-red-400">
@@ -625,153 +769,20 @@ function PurchasePackageModal({
           </div>
         )}
 
-        <div className="flex justify-end gap-3 pt-2">
-          <Button type="button" variant="ghost" onClick={onClose}>Annulla</Button>
-          <Button type="submit" disabled={submitting}>
+        <div className="flex justify-end gap-3 pt-2 border-t border-border">
+          <Button variant="ghost" onClick={onClose}>Annulla</Button>
+          <Button
+            onClick={handleSubmit}
+            disabled={submitting || !selectedService}
+          >
             {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            {selectedService?.is_subscription ? 'Attiva abbonamento' : 'Crea pacchetto'}
+            {kind === 'subscription' && 'Attiva abbonamento'}
+            {kind === 'package' && 'Crea pacchetto'}
+            {kind === 'oneoff' && `Registra acquisto (€ ${totalPrice.toFixed(2)})`}
+            {!selectedService && 'Seleziona un servizio'}
           </Button>
         </div>
-      </form>
-    </Modal>
-  );
-}
-
-// ============================================================================
-// CHARGE SERVICE MODAL (servizio singolo, es. noleggio sciolto)
-// ============================================================================
-function ChargeServiceModal({
-  open, onClose, memberId, services, onSuccess,
-}: {
-  open: boolean;
-  onClose: () => void;
-  memberId: string;
-  services: Service[];
-  onSuccess: () => void;
-}) {
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const {
-    register, handleSubmit, reset, watch, setValue, formState: { errors },
-  } = useForm<ChargeServiceFormData>({
-    resolver: zodResolver(chargeServiceSchema),
-    defaultValues: { quantity: 1, paid_now: false, payment_method: 'contanti' },
-  });
-
-  const selectedServiceId = watch('service_id');
-  const selectedService = services.find((s) => s.id === selectedServiceId);
-  const qty = watch('quantity');
-  const unitPrice = watch('unit_price');
-  const paidNow = watch('paid_now');
-
-  useEffect(() => {
-    if (selectedService) setValue('unit_price', selectedService.unit_price);
-  }, [selectedServiceId, selectedService, setValue]);
-
-  useEffect(() => {
-    if (open) {
-      reset({
-        service_id: '', quantity: 1, unit_price: 0,
-        paid_now: false, payment_method: 'contanti', notes: '',
-      });
-      setError(null);
-    }
-  }, [open, reset]);
-
-  const total = Number(unitPrice || 0) * Number(qty || 1);
-
-  const grouped = useMemo(() => {
-    const map: Record<string, Service[]> = {};
-    services.forEach((s) => {
-      if (!map[s.category]) map[s.category] = [];
-      map[s.category].push(s);
-    });
-    return map;
-  }, [services]);
-
-  const onSubmit = async (data: ChargeServiceFormData) => {
-    setSubmitting(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/soci/${memberId}/addebito`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j.error || 'Errore salvataggio');
-      }
-      onSuccess();
-      onClose();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Errore');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <Modal open={open} onClose={onClose} title="Addebito singolo" description="Per noleggi singoli, vendite occasionali" size="lg">
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-        <Select label="Servizio *" {...register('service_id')} error={errors.service_id?.message}>
-          <option value="">— Seleziona servizio —</option>
-          {(Object.entries(grouped) as [ServiceCategory, Service[]][]).map(([cat, svcs]) => (
-            <optgroup key={cat} label={SERVICE_CATEGORY_LABELS[cat]}>
-              {svcs.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name} — €{Number(s.unit_price).toFixed(2)}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </Select>
-
-        <div className="grid grid-cols-2 gap-4">
-          <Input label="Quantità" type="number" min={1} {...register('quantity')} />
-          <Input label="Prezzo unitario €" type="number" step="0.01" min={0} {...register('unit_price')} />
-        </div>
-
-        {total > 0 && (
-          <div className="p-3 rounded bg-accent/10 border border-accent/30 flex items-center justify-between">
-            <span className="text-sm text-text-muted">Totale</span>
-            <span className="font-display text-2xl font-bold text-accent flex items-center gap-1">
-              <Euro className="h-5 w-5" />
-              {total.toFixed(2)}
-            </span>
-          </div>
-        )}
-
-        <div className="space-y-3">
-          <Checkbox label="Pagato subito" {...register('paid_now')} />
-          {paidNow ? (
-            <Select label="Metodo pagamento" {...register('payment_method')}>
-              {(Object.keys(PAYMENT_METHOD_LABELS) as PaymentMethod[]).map((m) => (
-                <option key={m} value={m}>{PAYMENT_METHOD_LABELS[m]}</option>
-              ))}
-            </Select>
-          ) : (
-            <div className="p-3 rounded bg-amber-500/10 border border-amber-500/30 text-xs text-amber-400">
-              Verrà registrato come debito non pagato.
-            </div>
-          )}
-        </div>
-
-        <Textarea label="Note" {...register('notes')} />
-
-        {error && (
-          <div className="p-3 rounded bg-red-500/10 border border-red-500/30 text-sm text-red-400">{error}</div>
-        )}
-
-        <div className="flex justify-end gap-3 pt-2">
-          <Button type="button" variant="ghost" onClick={onClose}>Annulla</Button>
-          <Button type="submit" disabled={submitting}>
-            {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            Registra
-          </Button>
-        </div>
-      </form>
+      </div>
     </Modal>
   );
 }
