@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ChevronLeft, ChevronRight, Plus, Loader2, Anchor, Users, Wind,
   Trash2, Settings, CalendarDays, Sparkles, Lock, Unlock, CheckCircle2, AlertCircle,
+  Pencil, XCircle, FileText,
 } from 'lucide-react';
 import type {
   Boat, Instructor, Member, Service, SessionTemplate,
@@ -19,6 +20,8 @@ import { cn } from '@/lib/utils';
 import AddOutingModal from './AddOutingModal';
 import AddParticipantModal from './AddParticipantModal';
 import GenerateDayModal from './GenerateDayModal';
+import EditOutingModal from './EditOutingModal';
+import CancelOutingModal from './CancelOutingModal';
 
 interface OutingParticipant {
   id: string;
@@ -44,6 +47,8 @@ interface OutingFull {
   notes: string | null;
   status: OutingStatus;
   closed_at: string | null;
+  cancelled_at: string | null;
+  cancellation_reason: string | null;
   boat: { id: string; name: string; boat_type: string; capacity: number | null } | null;
   outing_instructors: OutingInstructor[];
   outing_participants: OutingParticipant[];
@@ -83,6 +88,8 @@ export default function PlanningView({
 
   const [addOutingFor, setAddOutingFor] = useState<{ template: SessionTemplate | null } | null>(null);
   const [addParticipantFor, setAddParticipantFor] = useState<OutingFull | null>(null);
+  const [editOutingFor, setEditOutingFor] = useState<OutingFull | null>(null);
+  const [cancelOutingFor, setCancelOutingFor] = useState<OutingFull | null>(null);
   const [showGenerate, setShowGenerate] = useState(false);
 
   const load = useCallback(async () => {
@@ -210,6 +217,13 @@ export default function PlanningView({
         </div>
         <div className="flex items-center gap-2">
           <Link
+            href="/report"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs bg-bg-elevated text-text-muted hover:text-text"
+          >
+            <FileText className="h-3.5 w-3.5" />
+            Report
+          </Link>
+          <Link
             href="/planning/template"
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs bg-bg-elevated text-text-muted hover:text-text"
           >
@@ -283,6 +297,8 @@ export default function PlanningView({
                 onRemoveParticipant={handleRemoveParticipant}
                 onCloseOuting={handleCloseOuting}
                 onReopenOuting={handleReopenOuting}
+                onEditOuting={(o) => setEditOutingFor(o)}
+                onCancelOuting={(o) => setCancelOutingFor(o)}
               />
             ))
           }
@@ -328,6 +344,8 @@ export default function PlanningView({
                     onRemoveParticipant={(pid) => handleRemoveParticipant(o.id, pid)}
                     onClose={() => handleCloseOuting(o)}
                     onReopen={() => handleReopenOuting(o)}
+                    onEdit={() => setEditOutingFor(o)}
+                    onCancel={() => setCancelOutingFor(o)}
                   />
                 ))}
               </div>
@@ -387,6 +405,29 @@ export default function PlanningView({
           onSuccess={load}
         />
       )}
+
+      {editOutingFor && (
+        <EditOutingModal
+          open={true}
+          onClose={() => setEditOutingFor(null)}
+          outing={editOutingFor}
+          boats={boats}
+          instructors={instructors}
+          onSuccess={load}
+        />
+      )}
+
+      {cancelOutingFor && (
+        <CancelOutingModal
+          open={true}
+          onClose={() => setCancelOutingFor(null)}
+          outingId={cancelOutingFor.id}
+          boatName={cancelOutingFor.boat?.name || ''}
+          wasClosedBefore={cancelOutingFor.status === 'chiusa'}
+          participantCount={cancelOutingFor.outing_participants.length}
+          onSuccess={load}
+        />
+      )}
     </div>
   );
 }
@@ -396,7 +437,7 @@ export default function PlanningView({
 // ============================================================================
 function SessionBlock({
   template, outings, isAdmin, onAddBoat, onAddParticipant, onDeleteOuting,
-  onRemoveParticipant, onCloseOuting, onReopenOuting,
+  onRemoveParticipant, onCloseOuting, onReopenOuting, onEditOuting, onCancelOuting,
 }: {
   template: SessionTemplate;
   outings: OutingFull[];
@@ -407,6 +448,8 @@ function SessionBlock({
   onRemoveParticipant: (outingId: string, pid: string) => void;
   onCloseOuting: (o: OutingFull) => void;
   onReopenOuting: (o: OutingFull) => void;
+  onEditOuting: (o: OutingFull) => void;
+  onCancelOuting: (o: OutingFull) => void;
 }) {
   const totalParticipants = outings.reduce((acc, o) => acc + o.outing_participants.length, 0);
   const allClosed = outings.length > 0 && outings.every((o) => o.status === 'chiusa');
@@ -471,6 +514,8 @@ function SessionBlock({
               onRemoveParticipant={(pid) => onRemoveParticipant(o.id, pid)}
               onClose={() => onCloseOuting(o)}
               onReopen={() => onReopenOuting(o)}
+              onEdit={() => onEditOuting(o)}
+              onCancel={() => onCancelOuting(o)}
             />
           ))}
         </div>
@@ -508,7 +553,8 @@ const PARTECIPATION_LABELS: Record<string, string> = {
 };
 
 function BoatOuting({
-  outing, isAdmin, onAddParticipant, onDelete, onRemoveParticipant, onClose, onReopen,
+  outing, isAdmin, onAddParticipant, onDelete, onRemoveParticipant,
+  onClose, onReopen, onEdit, onCancel,
 }: {
   outing: OutingFull;
   isAdmin: boolean;
@@ -517,19 +563,34 @@ function BoatOuting({
   onRemoveParticipant: (pid: string) => void;
   onClose: () => void;
   onReopen: () => void;
+  onEdit: () => void;
+  onCancel: () => void;
 }) {
   const capacity = outing.boat?.capacity || null;
   const fillPct = capacity ? (outing.outing_participants.length / capacity) * 100 : 0;
   const isClosed = outing.status === 'chiusa';
+  const isCancelled = outing.status === 'annullata';
+  const isDraft = outing.status === 'bozza';
 
   return (
-    <div className={cn('p-4', isClosed && 'bg-emerald-500/[0.02]')}>
+    <div className={cn(
+      'p-4',
+      isClosed && 'bg-emerald-500/[0.02]',
+      isCancelled && 'bg-red-500/[0.04] opacity-70'
+    )}>
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <Anchor className="h-4 w-4 text-accent" />
-            <span className="font-medium text-text">{outing.boat?.name || '?'}</span>
-            {isClosed ? (
+            <Anchor className={cn('h-4 w-4', isCancelled ? 'text-red-400' : 'text-accent')} />
+            <span className={cn('font-medium', isCancelled ? 'text-text-muted line-through' : 'text-text')}>
+              {outing.boat?.name || '?'}
+            </span>
+            {isCancelled ? (
+              <span className="text-xs px-2 py-0.5 rounded bg-red-500/10 text-red-400 flex items-center gap-1">
+                <XCircle className="h-3 w-3" />
+                Annullata
+              </span>
+            ) : isClosed ? (
               <span className="text-xs px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 flex items-center gap-1">
                 <Lock className="h-3 w-3" />
                 Chiusa
@@ -545,7 +606,7 @@ function BoatOuting({
                 {outing.departure_time.slice(0, 5)} – {outing.return_time.slice(0, 5)}
               </span>
             )}
-            {capacity && (
+            {capacity && !isCancelled && (
               <span className={cn(
                 'text-xs px-2 py-0.5 rounded flex items-center gap-1',
                 fillPct >= 100 ? 'bg-red-500/10 text-red-400' :
@@ -580,9 +641,17 @@ function BoatOuting({
               Chiusa il {new Date(outing.closed_at).toLocaleString('it-IT')}
             </div>
           )}
+          {isCancelled && (
+            <div className="text-[10px] text-red-400/80 mt-1 flex items-center gap-1.5">
+              <XCircle className="h-3 w-3" />
+              Annullata
+              {outing.cancelled_at && ` il ${new Date(outing.cancelled_at).toLocaleString('it-IT')}`}
+              {outing.cancellation_reason && ` — ${outing.cancellation_reason}`}
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          {!isClosed && (
+          {isDraft && (
             <>
               <Button size="sm" variant="secondary" onClick={onAddParticipant}>
                 <Plus className="h-3 w-3 mr-1" />
@@ -590,29 +659,61 @@ function BoatOuting({
               </Button>
               <Button size="sm" onClick={onClose}>
                 <Lock className="h-3 w-3 mr-1" />
-                Chiudi uscita
+                Chiudi
               </Button>
+              <button
+                onClick={onEdit}
+                className="p-1.5 rounded hover:bg-bg-elevated text-text-muted hover:text-accent"
+                title="Modifica"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={onCancel}
+                className="p-1.5 rounded hover:bg-bg-elevated text-text-muted hover:text-red-400"
+                title="Annulla sessione (maltempo, ecc.)"
+              >
+                <XCircle className="h-3.5 w-3.5" />
+              </button>
               <button
                 onClick={onDelete}
                 className="p-1.5 rounded hover:bg-bg-elevated text-text-muted hover:text-red-400"
-                title="Elimina uscita"
+                title="Elimina"
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
             </>
           )}
-          {isClosed && isAdmin && (
-            <Button size="sm" variant="ghost" onClick={onReopen}>
-              <Unlock className="h-3 w-3 mr-1" />
-              Riapri (admin)
-            </Button>
+          {isClosed && (
+            <>
+              <button
+                onClick={onEdit}
+                className="p-1.5 rounded hover:bg-bg-elevated text-text-muted hover:text-accent"
+                title="Modifica orari/istruttori/note"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={onCancel}
+                className="p-1.5 rounded hover:bg-bg-elevated text-text-muted hover:text-red-400"
+                title="Annulla sessione (rimborso completo)"
+              >
+                <XCircle className="h-3.5 w-3.5" />
+              </button>
+              {isAdmin && (
+                <Button size="sm" variant="ghost" onClick={onReopen}>
+                  <Unlock className="h-3 w-3 mr-1" />
+                  Riapri
+                </Button>
+              )}
+            </>
           )}
         </div>
       </div>
 
       {outing.outing_participants.length === 0 ? (
         <div className="text-xs text-text-dim italic px-2 py-3 bg-bg-elevated/30 rounded">
-          Nessun partecipante. {!isClosed && (
+          Nessun partecipante. {isDraft && (
             <>Click su <strong>Socio</strong> per aggiungere il primo.</>
           )}
         </div>
@@ -644,7 +745,7 @@ function BoatOuting({
                   )}
                 </div>
               </div>
-              {!isClosed && (
+              {isDraft && (
                 <button
                   onClick={() => onRemoveParticipant(p.id)}
                   className="p-1 rounded hover:bg-bg text-text-dim hover:text-red-400 shrink-0"

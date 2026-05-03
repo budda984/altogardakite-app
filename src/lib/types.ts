@@ -492,9 +492,10 @@ export interface SessionTemplate {
 // ============================================================================
 // OUTING STATUS
 // ============================================================================
-export type OutingStatus = 'bozza' | 'chiusa';
+export type OutingStatus = 'bozza' | 'chiusa' | 'annullata';
 
 export const OUTING_STATUS_LABELS: Record<OutingStatus, string> = {
   bozza: 'Bozza',
   chiusa: 'Chiusa',
+  annullata: 'Annullata',
 };
