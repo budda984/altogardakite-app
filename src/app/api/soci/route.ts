@@ -22,7 +22,8 @@ export async function POST(request: Request) {
       ...data,
       first_name: data.first_name.trim(),
       last_name: data.last_name.trim(),
-      fiscal_code: data.fiscal_code.toUpperCase(),
+      fiscal_code: data.fiscal_code ? data.fiscal_code.toUpperCase().trim() : null,
+      foreign_id_doc: data.foreign_id_doc?.trim() || null,
       email: data.email.toLowerCase(),
       birth_province: data.birth_province?.toUpperCase() || null,
       // Pulizia campi parent se non minore

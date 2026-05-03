@@ -9,6 +9,7 @@ import Link from 'next/link';
 
 import { memberSchema, type MemberFormData } from '@/lib/validation/schemas';
 import { Input } from '@/components/ui/Input';
+import { DateInput } from '@/components/ui/DateInput';
 import { Button } from '@/components/ui/Button';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Card } from '@/components/ui/Card';
@@ -42,6 +43,7 @@ export default function NewMemberPage() {
     resolver: zodResolver(memberSchema),
     defaultValues: {
       is_minor: false,
+      is_foreign: false,
       paper_form_signed: false,
       statute_accepted: false,
       medical_certificate: false,
@@ -57,6 +59,7 @@ export default function NewMemberPage() {
   const birthDate = watch('birth_date');
   const isMinorWatch = watch('is_minor');
   const paperSigned = watch('paper_form_signed');
+  const isForeign = watch('is_foreign');
 
   // Auto-detect minore quando cambia data nascita
   if (birthDate && isMinor(birthDate) !== isMinorWatch) {
@@ -66,8 +69,11 @@ export default function NewMemberPage() {
   const goNext = async () => {
     // Valida solo i campi della sezione corrente prima di avanzare
     const fieldsBySection: Record<number, (keyof MemberFormData)[]> = {
-      1: ['first_name', 'last_name', 'birth_date', 'birth_place', 'fiscal_code',
-          'phone', 'email', 'address_street', 'address_number', 'city', 'cap'],
+      1: [
+        'first_name', 'last_name', 'birth_date', 'birth_place',
+        'phone', 'email', 'address_street', 'address_number', 'city', 'cap',
+        'is_foreign', 'fiscal_code', 'foreign_id_doc',
+      ],
       2: ['statute_accepted', 'medical_certificate', 'payment_commitment',
           'photo_authorization', 'signature_admission'],
       3: ['navigation_rules_accepted', 'signature_navigation'],
@@ -192,12 +198,50 @@ export default function NewMemberPage() {
               <div className="grid md:grid-cols-2 gap-4">
                 <Input label="Nome" required {...register('first_name')} error={errors.first_name?.message} />
                 <Input label="Cognome" required {...register('last_name')} error={errors.last_name?.message} />
-                <Input label="Data di nascita" type="date" required {...register('birth_date')} error={errors.birth_date?.message} />
+                <Controller
+                  control={control}
+                  name="birth_date"
+                  render={({ field }) => (
+                    <DateInput
+                      label="Data di nascita"
+                      required
+                      value={field.value || ''}
+                      onChange={field.onChange}
+                      onBlur={field.onBlur}
+                      error={errors.birth_date?.message}
+                      hint="Digita gg/mm/aaaa o usa l'icona calendario"
+                    />
+                  )}
+                />
                 <Input label="Luogo di nascita" required {...register('birth_place')} error={errors.birth_place?.message} />
                 <Input label="Provincia (sigla)" maxLength={2} {...register('birth_province')} error={errors.birth_province?.message} className="uppercase" />
-                <Input label="Codice fiscale" required {...register('fiscal_code')} error={errors.fiscal_code?.message} className="uppercase font-mono" />
                 <Input label="Cellulare" type="tel" required {...register('phone')} error={errors.phone?.message} />
-                <Input label="Email" type="email" required {...register('email')} error={errors.email?.message} />
+                <Input label="Email" type="email" required {...register('email')} error={errors.email?.message} className="md:col-span-2" />
+              </div>
+
+              <div className="mt-4 p-3 rounded bg-bg-elevated border border-border space-y-3">
+                <Checkbox
+                  label="Socio straniero (senza codice fiscale italiano)"
+                  {...register('is_foreign')}
+                />
+                {isForeign ? (
+                  <Input
+                    label="Documento di identita"
+                    {...register('foreign_id_doc')}
+                    error={errors.foreign_id_doc?.message}
+                    placeholder="es. Passaporto AB1234567"
+                    hint="Numero passaporto, carta d'identita straniera o documento equivalente"
+                  />
+                ) : (
+                  <Input
+                    label="Codice fiscale"
+                    required
+                    {...register('fiscal_code')}
+                    error={errors.fiscal_code?.message}
+                    className="uppercase font-mono"
+                    placeholder="RSSMRA80A01H501Z"
+                  />
+                )}
               </div>
             </Card>
 
@@ -206,7 +250,14 @@ export default function NewMemberPage() {
                 <Input label="Via" required className="md:col-span-2" {...register('address_street')} error={errors.address_street?.message} />
                 <Input label="Civico" required {...register('address_number')} error={errors.address_number?.message} />
                 <Input label="Citta" required className="md:col-span-2" {...register('city')} error={errors.city?.message} />
-                <Input label="CAP" required maxLength={5} {...register('cap')} error={errors.cap?.message} />
+                <Input
+                  label="CAP"
+                  required
+                  maxLength={isForeign ? undefined : 5}
+                  {...register('cap')}
+                  error={errors.cap?.message}
+                  hint={isForeign ? 'CAP/postal code estero' : '5 cifre'}
+                />
               </div>
             </Card>
 
@@ -219,7 +270,19 @@ export default function NewMemberPage() {
                 <div className="grid md:grid-cols-2 gap-4">
                   <Input label="Nome genitore" required {...register('parent_first_name')} error={errors.parent_first_name?.message} />
                   <Input label="Cognome genitore" required {...register('parent_last_name')} error={errors.parent_last_name?.message} />
-                  <Input label="Data nascita" type="date" required {...register('parent_birth_date')} />
+                  <Controller
+                    control={control}
+                    name="parent_birth_date"
+                    render={({ field }) => (
+                      <DateInput
+                        label="Data nascita genitore"
+                        required
+                        value={field.value || ''}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                      />
+                    )}
+                  />
                   <Input label="Luogo nascita" required {...register('parent_birth_place')} />
                   <Input label="Codice fiscale" required {...register('parent_fiscal_code')} className="uppercase font-mono" />
                   <Input label="Cellulare" type="tel" required {...register('parent_phone')} />
