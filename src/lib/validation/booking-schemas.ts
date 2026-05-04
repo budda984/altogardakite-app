@@ -5,6 +5,7 @@ export const createBookingSchema = z.object({
   booking_date: z.string().min(1),
   session_template_id: z.string().uuid(),
   preferred_discipline: z.enum(['kite', 'wingfoil', 'sit_kite', 'wingfoil_adattato', 'corso', 'altro']).nullable().optional(),
+  participation_type: z.enum(['corso', 'lift_supervisionato', 'lift_semplice']).default('lift_semplice'),
   notes: z.string().nullable().optional(),
 });
 export type CreateBookingFormData = z.infer<typeof createBookingSchema>;

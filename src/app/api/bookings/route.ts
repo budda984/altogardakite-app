@@ -61,11 +61,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const parsed = createBookingSchema.safeParse(body);
     if (!parsed.success) {
-      const detailed = parsed.error.issues
-        .map((i) => `${i.path.join('.')}: ${i.message}`)
-        .join('; ');
       return NextResponse.json(
-        { error: `Dati non validi - ${detailed}`, issues: parsed.error.issues },
+        { error: 'Dati non validi', issues: parsed.error.issues },
         { status: 400 }
       );
     }
@@ -119,6 +116,7 @@ export async function POST(request: NextRequest) {
         booking_date: data.booking_date,
         session_template_id: data.session_template_id,
         preferred_discipline: data.preferred_discipline || null,
+        participation_type: data.participation_type,
         notes: data.notes || null,
         status: 'pending',
         created_by: auth.userId,

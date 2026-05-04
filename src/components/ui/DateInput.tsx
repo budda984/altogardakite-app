@@ -15,33 +15,18 @@ interface DateInputProps {
   className?: string;
 }
 
-/** Trasforma "01052026" in "01/05/2026" inserendo automaticamente le slash */
-function autoFormat(raw: string): string {
-  // Strip tutto tranne digit, slash, dash, punto
-  const cleaned = raw.replace(/[^\d\/\-.]/g, '');
-  // Estrai solo le cifre
-  const digits = cleaned.replace(/\D/g, '');
-
-  if (digits.length === 0) return '';
-  if (digits.length <= 2) return digits;
-  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
-  // Massimo 8 digit
-  const truncated = digits.slice(0, 8);
-  return `${truncated.slice(0, 2)}/${truncated.slice(2, 4)}/${truncated.slice(4)}`;
-}
-
-/** Parsa "gg/mm/aaaa" → ISO "yyyy-mm-dd". Richiede formato COMPLETO. */
+/** Converte una stringa "gg/mm/aaaa" in ISO "yyyy-mm-dd". Torna '' se invalida */
 function parseItalianDate(s: string): string {
   const trimmed = s.trim();
   if (!trimmed) return '';
-  const match = trimmed.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+  const match = trimmed.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
   if (!match) return '';
   const [, dd, mm, yyyyRaw] = match;
-  const yyyy = parseInt(yyyyRaw, 10);
+  let yyyy = parseInt(yyyyRaw, 10);
+  if (yyyy < 100) yyyy = yyyy < 30 ? 2000 + yyyy : 1900 + yyyy;
   const day = parseInt(dd, 10);
   const month = parseInt(mm, 10);
   if (day < 1 || day > 31 || month < 1 || month > 12) return '';
-  if (yyyy < 1900 || yyyy > 2100) return '';
   const iso = `${yyyy.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
   const d = new Date(iso + 'T12:00:00');
   if (Number.isNaN(d.getTime())) return '';
@@ -68,36 +53,15 @@ export function DateInput({
   }, [value]);
 
   const handleTextChange = (newText: string) => {
-    const formatted = autoFormat(newText);
-    setText(formatted);
-    // Parsa SOLO se la stringa e completa (10 caratteri "gg/mm/aaaa")
-    if (formatted.length === 10) {
-      const iso = parseItalianDate(formatted);
-      onChange(iso);
-    } else {
-      // Mentre digita: nessun valore valido ancora
-      onChange('');
-    }
+    setText(newText);
+    const iso = parseItalianDate(newText);
+    onChange(iso);
   };
 
   const handleTextBlur = () => {
-    // Al blur, prova a parsare. Se l'input e parziale (es. "5/3" senza anno),
-    // applica defaults sensati: anno corrente.
-    const trimmed = text.trim();
-    if (trimmed && trimmed.length < 10) {
-      const partial = trimmed.match(/^(\d{1,2})[\/\-.](\d{1,2})$/);
-      if (partial) {
-        const currentYear = new Date().getFullYear();
-        const completed = `${partial[1].padStart(2, '0')}/${partial[2].padStart(2, '0')}/${currentYear}`;
-        const iso = parseItalianDate(completed);
-        if (iso) {
-          setText(completed);
-          onChange(iso);
-        }
-      }
-    } else if (trimmed.length === 10) {
-      const iso = parseItalianDate(trimmed);
-      if (iso) setText(formatIso(iso)); // re-formatta canonicamente
+    const iso = parseItalianDate(text);
+    if (iso) {
+      setText(formatIso(iso));
     }
     onBlur?.();
   };

@@ -7,9 +7,9 @@ import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
 import { Textarea } from '@/components/ui/Textarea';
 import type {
-  Member, SessionTemplate, BookingWithMember, LiftDiscipline,
+  Member, SessionTemplate, BookingWithMember, LiftDiscipline, ParticipationType,
 } from '@/lib/types';
-import { DISCIPLINE_LABELS } from '@/lib/types';
+import { DISCIPLINE_LABELS, PARTICIPATION_LABELS } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
 interface Props {
@@ -25,6 +25,7 @@ interface Props {
 interface Selection {
   member_id: string;
   preferred_discipline: LiftDiscipline | null;
+  participation_type: ParticipationType;
   notes: string;
 }
 
@@ -38,6 +39,8 @@ export default function AddBookingModal({
 
   // Default disciplina dal template
   const [defaultDiscipline, setDefaultDiscipline] = useState<LiftDiscipline>(template.discipline);
+  // Default tipo partecipazione
+  const [defaultParticipation, setDefaultParticipation] = useState<ParticipationType>('lift_semplice');
 
   // Soci gia prenotati per questo slot (esclusi)
   const alreadyBookedIds = useMemo(() => {
@@ -54,6 +57,7 @@ export default function AddBookingModal({
       setMemberSearch('');
       setError(null);
       setDefaultDiscipline(template.discipline);
+      setDefaultParticipation('lift_semplice');
     }
   }, [open, template.discipline]);
 
@@ -77,6 +81,7 @@ export default function AddBookingModal({
       {
         member_id: memberId,
         preferred_discipline: defaultDiscipline,
+        participation_type: defaultParticipation,
         notes: '',
       },
     ]);
@@ -115,6 +120,7 @@ export default function AddBookingModal({
               booking_date: date,
               session_template_id: template.id,
               preferred_discipline: s.preferred_discipline,
+              participation_type: s.participation_type,
               notes: s.notes || '',
             }),
           }).then(async (r) => {
@@ -153,18 +159,32 @@ export default function AddBookingModal({
       size="xl"
     >
       <div className="space-y-5">
-        {/* Default disciplina */}
-        <div className="p-3 rounded bg-bg-elevated border border-border">
-          <Select
-            label="Disciplina preferita di default per i nuovi soci aggiunti"
-            value={defaultDiscipline}
-            onChange={(e) => setDefaultDiscipline(e.target.value as LiftDiscipline)}
-          >
-            {Object.entries(DISCIPLINE_LABELS).map(([k, v]) => (
-              <option key={k} value={k}>{v}</option>
-            ))}
-          </Select>
-          <p className="text-[10px] text-text-dim mt-1.5">
+        {/* Default disciplina + tipo partecipazione */}
+        <div className="p-3 rounded bg-bg-elevated border border-border space-y-3">
+          <div className="text-xs font-medium text-text-muted">
+            Default per i nuovi soci aggiunti:
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Select
+              label="Tipo partecipazione"
+              value={defaultParticipation}
+              onChange={(e) => setDefaultParticipation(e.target.value as ParticipationType)}
+            >
+              <option value="lift_semplice">Lift semplice</option>
+              <option value="lift_supervisionato">Lift assistito / supervisionato</option>
+              <option value="corso">Corso (lezione)</option>
+            </Select>
+            <Select
+              label="Disciplina"
+              value={defaultDiscipline}
+              onChange={(e) => setDefaultDiscipline(e.target.value as LiftDiscipline)}
+            >
+              {Object.entries(DISCIPLINE_LABELS).map(([k, v]) => (
+                <option key={k} value={k}>{v}</option>
+              ))}
+            </Select>
+          </div>
+          <p className="text-[10px] text-text-dim">
             Modificabile per ogni socio singolarmente nella lista qui sotto.
           </p>
         </div>
@@ -240,26 +260,40 @@ export default function AddBookingModal({
                         <X className="h-4 w-4" />
                       </button>
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <select
-                        value={s.preferred_discipline || ''}
-                        onChange={(e) => updateSelection(s.member_id, {
-                          preferred_discipline: (e.target.value || null) as LiftDiscipline | null
-                        })}
-                        className="text-xs rounded bg-bg border border-border px-2 py-1.5 text-text"
-                        style={{ colorScheme: 'dark' }}
-                      >
-                        <option value="">Disciplina indicativa...</option>
-                        {Object.entries(DISCIPLINE_LABELS).map(([k, v]) => (
-                          <option key={k} value={k}>{v}</option>
-                        ))}
-                      </select>
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <select
+                          value={s.participation_type}
+                          onChange={(e) => updateSelection(s.member_id, {
+                            participation_type: e.target.value as ParticipationType
+                          })}
+                          className="text-xs rounded bg-bg border border-border px-2 py-1.5 text-text"
+                          style={{ colorScheme: 'dark' }}
+                        >
+                          <option value="lift_semplice">Lift semplice</option>
+                          <option value="lift_supervisionato">Lift assistito</option>
+                          <option value="corso">Corso (lezione)</option>
+                        </select>
+                        <select
+                          value={s.preferred_discipline || ''}
+                          onChange={(e) => updateSelection(s.member_id, {
+                            preferred_discipline: (e.target.value || null) as LiftDiscipline | null
+                          })}
+                          className="text-xs rounded bg-bg border border-border px-2 py-1.5 text-text"
+                          style={{ colorScheme: 'dark' }}
+                        >
+                          <option value="">Disciplina indicativa...</option>
+                          {Object.entries(DISCIPLINE_LABELS).map(([k, v]) => (
+                            <option key={k} value={k}>{v}</option>
+                          ))}
+                        </select>
+                      </div>
                       <input
                         type="text"
                         value={s.notes}
                         onChange={(e) => updateSelection(s.member_id, { notes: e.target.value })}
                         placeholder="Note (es. lezione, trasferimento...)"
-                        className="text-xs rounded bg-bg border border-border px-2 py-1.5 text-text placeholder:text-text-dim"
+                        className="w-full text-xs rounded bg-bg border border-border px-2 py-1.5 text-text placeholder:text-text-dim"
                       />
                     </div>
                   </div>

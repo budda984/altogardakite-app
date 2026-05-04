@@ -542,6 +542,7 @@ export interface Booking {
   booking_date: string;
   session_template_id: string;
   preferred_discipline: LiftDiscipline | null;
+  participation_type: ParticipationType;
   notes: string | null;
   status: BookingStatus;
   outing_id: string | null;

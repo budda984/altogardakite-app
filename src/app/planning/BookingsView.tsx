@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils';
 import type {
   Boat, Instructor, Member, SessionTemplate, BookingWithMember,
 } from '@/lib/types';
-import { DISCIPLINE_LABELS, MEMBER_TYPE_LABELS } from '@/lib/types';
+import { DISCIPLINE_LABELS, MEMBER_TYPE_LABELS, PARTICIPATION_LABELS } from '@/lib/types';
 import AddBookingModal from './AddBookingModal';
 import CreateOutingFromBookingsModal from './CreateOutingFromBookingsModal';
 
@@ -274,6 +274,15 @@ function BookingCard({
           )}
         </div>
         <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+          {/* Tipo partecipazione - sempre visibile */}
+          <span className={cn(
+            'text-[10px] px-1.5 py-0.5 rounded',
+            booking.participation_type === 'corso' ? 'bg-blue-500/10 text-blue-400' :
+            booking.participation_type === 'lift_supervisionato' ? 'bg-purple-500/10 text-purple-400' :
+            'bg-emerald-500/10 text-emerald-400'
+          )}>
+            {PARTICIPATION_LABELS[booking.participation_type]}
+          </span>
           {booking.preferred_discipline && (
             <span className="text-[10px] text-text-muted">
               {DISCIPLINE_LABELS[booking.preferred_discipline]}
