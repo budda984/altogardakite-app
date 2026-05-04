@@ -1,75 +1,51 @@
 import { z } from 'zod';
 
 // ============================================================================
-// Schema validazione Member (domanda ammissione socio)
-//
-// IMPORTANTE: la validazione delle dichiarazioni e firme avviene SOLO
-// all'invio finale del form (sezione 6 -> Conferma) tramite handleSubmit.
-// Durante il flusso step-by-step la validazione e' gestita manualmente con
-// trigger() su un sottoinsieme di campi della sezione corrente.
-// Per questo lo schema base non blocca i campi se non spuntati: e' la
-// onSubmit logic della pagina che richiede tutto coerente.
+// Schema validazione Member (versione snella - dati essenziali, no firme)
+// Le firme avvengono su carta, qui registriamo solo dati anagrafici
+// + tipo associativo + certificato medico
 // ============================================================================
 
 export const memberSchema = z.object({
-  // Anagrafica principale
+  // Anagrafica essenziale
   first_name: z.string().min(1, 'Nome obbligatorio').max(100),
   last_name: z.string().min(1, 'Cognome obbligatorio').max(100),
   birth_date: z.string().min(1, 'Data nascita obbligatoria'),
-  birth_place: z.string().min(1, 'Luogo nascita obbligatorio'),
+  birth_place: z.string().optional().or(z.literal('')),
   birth_province: z.string().max(2).optional().or(z.literal('')),
 
-  // Stranieri: niente codice fiscale italiano richiesto
+  // Stranieri (codice fiscale opzionale)
   is_foreign: z.boolean().default(false),
   fiscal_code: z.string().optional().or(z.literal('')),
   foreign_id_doc: z.string().optional().or(z.literal('')),
 
-  phone: z.string().min(1, 'Cellulare obbligatorio'),
+  // Contatti
+  phone: z.string().min(1, 'Telefono obbligatorio'),
   email: z.string().email('Email non valida'),
 
-  // Residenza
-  address_street: z.string().min(1, 'Via obbligatoria'),
-  address_number: z.string().min(1, 'Civico obbligatorio'),
-  city: z.string().min(1, 'Citta obbligatoria'),
-  cap: z.string().min(1, 'CAP obbligatorio'),
-
-  // Modulo cartaceo gia firmato (salta firme digitali)
-  paper_form_signed: z.boolean().default(false),
+  // Indirizzo (campo libero singolo, semplificato)
+  address: z.string().min(1, 'Indirizzo obbligatorio'),
 
   // Minore
-  is_minor: z.boolean(),
+  is_minor: z.boolean().default(false),
   parent_first_name: z.string().optional().or(z.literal('')),
   parent_last_name: z.string().optional().or(z.literal('')),
-  parent_birth_date: z.string().optional().or(z.literal('')),
-  parent_birth_place: z.string().optional().or(z.literal('')),
-  parent_fiscal_code: z.string().optional().or(z.literal('')),
-  parent_address_street: z.string().optional().or(z.literal('')),
-  parent_address_number: z.string().optional().or(z.literal('')),
-  parent_city: z.string().optional().or(z.literal('')),
-  parent_cap: z.string().optional().or(z.literal('')),
   parent_phone: z.string().optional().or(z.literal('')),
   parent_email: z.string().email().optional().or(z.literal('')),
 
-  // Dichiarazioni: tipi base, validazione condizionale via superRefine sotto
-  statute_accepted: z.boolean(),
-  medical_certificate: z.boolean(),
-  payment_commitment: z.boolean(),
-  photo_authorization: z.boolean(),
-  navigation_rules_accepted: z.boolean(),
-  safeguarding_acknowledged: z.boolean(),
-  gdpr_consent_1a: z.boolean(),
-  gdpr_consent_1b: z.boolean(),
+  // Tipo associativo e quota
+  member_type: z.enum(['sostenitore', 'normale', 'con_lift']),
+  membership_paid_now: z.boolean().default(true),
+  membership_payment_method: z.enum(['contanti', 'bancomat', 'bonifico', 'altro']).default('contanti'),
 
-  // Firme - tipi base, validazione condizionale via superRefine sotto
-  signature_admission: z.string().optional().or(z.literal('')),
-  signature_navigation: z.string().optional().or(z.literal('')),
-  signature_safeguarding: z.string().optional().or(z.literal('')),
-  signature_gdpr_1a: z.string().optional().or(z.literal('')),
-  signature_gdpr_1b: z.string().optional().or(z.literal('')),
+  // Certificato medico
+  medical_cert_received: z.boolean().default(false),
+  medical_cert_expires_at: z.string().optional().or(z.literal('')),
 
+  // Note
   notes: z.string().optional().or(z.literal('')),
 }).superRefine((data, ctx) => {
-  // Validazione codice fiscale: obbligatorio per italiani, formato CF
+  // CF obbligatorio per italiani
   if (!data.is_foreign) {
     if (!data.fiscal_code || data.fiscal_code.trim() === '') {
       ctx.addIssue({
@@ -85,21 +61,10 @@ export const memberSchema = z.object({
       });
     }
   }
-  // Stranieri: numero documento (passaporto/ID) consigliato ma non obbligatorio
 
-  // CAP italiani: 5 cifre
-  if (!data.is_foreign && data.cap && !/^\d{5}$/.test(data.cap)) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: 'CAP non valido (5 cifre)',
-      path: ['cap'],
-    });
-  }
-
-  // Minore: dati genitore obbligatori
+  // Minore: dati genitore essenziali
   if (data.is_minor) {
-    if (!data.parent_first_name || !data.parent_last_name ||
-        !data.parent_phone) {
+    if (!data.parent_first_name || !data.parent_last_name || !data.parent_phone) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'Per i minori sono obbligatori nome, cognome e telefono del genitore',
@@ -108,40 +73,14 @@ export const memberSchema = z.object({
     }
   }
 
-  // Dichiarazioni e firme: SOLO se NON cartaceo
-  if (!data.paper_form_signed) {
-    const declarations: { field: keyof typeof data; label: string }[] = [
-      { field: 'statute_accepted', label: 'Statuto' },
-      { field: 'medical_certificate', label: 'Certificato medico' },
-      { field: 'payment_commitment', label: 'Impegno pagamento' },
-      { field: 'navigation_rules_accepted', label: 'Regole navigazione' },
-      { field: 'safeguarding_acknowledged', label: 'Safeguarding' },
-      { field: 'gdpr_consent_1a', label: 'GDPR consenso' },
-    ];
-    for (const d of declarations) {
-      if (!data[d.field]) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: `Spunta obbligatoria: ${d.label}`,
-          path: [d.field],
-        });
-      }
-    }
-
-    const signatures: (keyof typeof data)[] = [
-      'signature_admission', 'signature_navigation',
-      'signature_safeguarding', 'signature_gdpr_1a',
-    ];
-    for (const s of signatures) {
-      const v = data[s] as string | undefined;
-      if (!v || v.length < 100) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: `Firma obbligatoria`,
-          path: [s],
-        });
-      }
-    }
+  // Sostenitori: niente certificato medico richiesto
+  // Per gli altri, se hanno marcato "ricevuto", la data scadenza e' obbligatoria
+  if (data.medical_cert_received && !data.medical_cert_expires_at) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Inserisci la data di scadenza del certificato',
+      path: ['medical_cert_expires_at'],
+    });
   }
 });
 

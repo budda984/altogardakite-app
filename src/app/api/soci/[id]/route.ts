@@ -33,17 +33,13 @@ export async function PATCH(
         last_name: data.last_name.trim(),
         email: data.email ? data.email.toLowerCase().trim() : null,
         phone: data.phone || null,
-        address_street: data.address_street || null,
-        address_number: data.address_number || null,
-        city: data.city || null,
-        cap: data.cap || null,
-        birth_province: data.birth_province
-          ? data.birth_province.toUpperCase().trim()
-          : null,
+        address_street: data.address || null,
         fiscal_code: data.fiscal_code
           ? data.fiscal_code.toUpperCase().trim()
           : null,
         notes: data.notes || null,
+        medical_cert_received: data.medical_cert_received,
+        medical_cert_expires_at: data.medical_cert_expires_at || null,
       })
       .eq('id', memberId)
       .select()

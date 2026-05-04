@@ -490,6 +490,31 @@ export interface SessionTemplate {
 }
 
 // ============================================================================
+// MEMBER TYPE
+// ============================================================================
+export type MemberType = 'sostenitore' | 'normale' | 'con_lift';
+
+export const MEMBER_TYPE_LABELS: Record<MemberType, string> = {
+  sostenitore: 'Sostenitore',
+  normale: 'Normale',
+  con_lift: 'Con lift incluso',
+};
+
+export const MEMBER_TYPE_PRICES: Record<MemberType, number> = {
+  sostenitore: 10,
+  normale: 30,
+  con_lift: 45,
+};
+
+export interface DashboardAlerts {
+  memberships_expiring_soon: number;
+  memberships_expired: number;
+  medical_certs_expiring_soon: number;
+  medical_certs_expired: number;
+  members_missing_medical: number;
+}
+
+// ============================================================================
 // OUTING STATUS
 // ============================================================================
 export type OutingStatus = 'bozza' | 'chiusa' | 'annullata';

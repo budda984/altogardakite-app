@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
-import { Users, Sailboat, Package, GraduationCap, Plus, ArrowRight } from 'lucide-react';
+import { Users, Sailboat, Package, GraduationCap, Plus, ArrowRight, AlertTriangle, CalendarClock, HeartPulse } from 'lucide-react';
 import { formatDate, formatTime } from '@/lib/utils';
 import { BOAT_LABELS, WIND_SESSION_LABELS } from '@/lib/types';
 
@@ -14,13 +14,29 @@ export default async function Dashboard() {
     { count: equipmentCount },
     { count: activeCoursesCount },
     { data: recentOutings },
+    { data: alertsRow },
   ] = await Promise.all([
     supabase.from('members').select('*', { count: 'exact', head: true }).eq('active', true),
     supabase.from('outings').select('*', { count: 'exact', head: true }),
     supabase.from('equipment').select('*', { count: 'exact', head: true }).eq('status', 'disponibile'),
     supabase.from('courses').select('*', { count: 'exact', head: true }).eq('status', 'attivo'),
     supabase.from('outings_with_details').select('*').order('outing_date', { ascending: false }).limit(5),
+    supabase.from('dashboard_alerts').select('*').single(),
   ]);
+
+  const alerts = alertsRow || {
+    memberships_expiring_soon: 0,
+    memberships_expired: 0,
+    medical_certs_expiring_soon: 0,
+    medical_certs_expired: 0,
+    members_missing_medical: 0,
+  };
+
+  const hasAlerts =
+    alerts.memberships_expiring_soon > 0 ||
+    alerts.memberships_expired > 0 ||
+    alerts.medical_certs_expiring_soon > 0 ||
+    alerts.medical_certs_expired > 0;
 
   const stats = [
     { label: 'Soci attivi', value: membersCount ?? 0, icon: Users, href: '/soci', color: 'text-accent' },
@@ -57,6 +73,106 @@ export default async function Dashboard() {
           <Plus className="h-4 w-4" /> Registra uscita
         </Link>
       </div>
+
+      {/* Alert dashboard */}
+      {hasAlerts && (
+        <div className="mb-10">
+          <h2 className="text-xs uppercase tracking-widest text-text-dim mb-3 flex items-center gap-1.5">
+            <AlertTriangle className="h-3.5 w-3.5" />
+            Avvisi
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {alerts.memberships_expired > 0 && (
+              <Link
+                href="/soci"
+                className="block p-4 rounded-lg bg-red-500/10 border border-red-500/30 hover:bg-red-500/15 transition-colors"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="flex items-center gap-2 text-red-400">
+                      <CalendarClock className="h-4 w-4" />
+                      <span className="text-sm font-medium">Tessere scadute</span>
+                    </div>
+                    <div className="text-2xl font-display font-bold text-red-400 mt-1">
+                      {alerts.memberships_expired}
+                    </div>
+                    <div className="text-xs text-text-muted mt-0.5">
+                      {alerts.memberships_expired === 1 ? 'socio con' : 'soci con'} tessera scaduta da rinnovare
+                    </div>
+                  </div>
+                  <ArrowRight className="h-5 w-5 text-red-400" />
+                </div>
+              </Link>
+            )}
+            {alerts.memberships_expiring_soon > 0 && (
+              <Link
+                href="/soci"
+                className="block p-4 rounded-lg bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/15 transition-colors"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="flex items-center gap-2 text-amber-400">
+                      <CalendarClock className="h-4 w-4" />
+                      <span className="text-sm font-medium">Tessere in scadenza</span>
+                    </div>
+                    <div className="text-2xl font-display font-bold text-amber-400 mt-1">
+                      {alerts.memberships_expiring_soon}
+                    </div>
+                    <div className="text-xs text-text-muted mt-0.5">
+                      tessere in scadenza nei prossimi 30 giorni
+                    </div>
+                  </div>
+                  <ArrowRight className="h-5 w-5 text-amber-400" />
+                </div>
+              </Link>
+            )}
+            {alerts.medical_certs_expired > 0 && (
+              <Link
+                href="/soci"
+                className="block p-4 rounded-lg bg-red-500/10 border border-red-500/30 hover:bg-red-500/15 transition-colors"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="flex items-center gap-2 text-red-400">
+                      <HeartPulse className="h-4 w-4" />
+                      <span className="text-sm font-medium">Certificati scaduti</span>
+                    </div>
+                    <div className="text-2xl font-display font-bold text-red-400 mt-1">
+                      {alerts.medical_certs_expired}
+                    </div>
+                    <div className="text-xs text-text-muted mt-0.5">
+                      certificati medici scaduti
+                    </div>
+                  </div>
+                  <ArrowRight className="h-5 w-5 text-red-400" />
+                </div>
+              </Link>
+            )}
+            {alerts.medical_certs_expiring_soon > 0 && (
+              <Link
+                href="/soci"
+                className="block p-4 rounded-lg bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/15 transition-colors"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="flex items-center gap-2 text-amber-400">
+                      <HeartPulse className="h-4 w-4" />
+                      <span className="text-sm font-medium">Certificati in scadenza</span>
+                    </div>
+                    <div className="text-2xl font-display font-bold text-amber-400 mt-1">
+                      {alerts.medical_certs_expiring_soon}
+                    </div>
+                    <div className="text-xs text-text-muted mt-0.5">
+                      certificati medici in scadenza nei prossimi 30 giorni
+                    </div>
+                  </div>
+                  <ArrowRight className="h-5 w-5 text-amber-400" />
+                </div>
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Stats grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-12">

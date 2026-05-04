@@ -1,11 +1,13 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Mail, Phone, MapPin, Calendar, FileSignature, CheckCircle2, XCircle } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, MapPin, Calendar, FileSignature, CheckCircle2, XCircle, AlertTriangle, Heart, User as UserIcon, Wind } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
+import { getAuth } from '@/lib/auth';
 import { formatDate, calcAge } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import MemberWalletPanel from '@/components/MemberWalletPanel';
-import EditMemberButton from '@/components/EditMemberButton';
+import MemberActions from '@/components/MemberActions';
+import { MEMBER_TYPE_LABELS } from '@/lib/types';
 
 export default async function MemberDetailPage({
   params,
@@ -25,6 +27,8 @@ export default async function MemberDetailPage({
     .single();
 
   if (!member) notFound();
+
+  const auth = await getAuth();
 
   // Corsi e uscite del socio
   const [{ data: courses }, { data: outings }, { data: services }] = await Promise.all([
@@ -76,7 +80,7 @@ export default async function MemberDetailPage({
               {member.first_name} {member.last_name}
             </h1>
           </div>
-          <EditMemberButton member={member} />
+          <MemberActions member={member} isAdmin={auth?.isAdmin || false} />
         </div>
         <div className="flex flex-wrap gap-4 mt-3 text-sm text-text-muted">
           <span className="flex items-center gap-1.5">
@@ -94,6 +98,68 @@ export default async function MemberDetailPage({
               <Phone className="h-4 w-4" /> {member.phone}
             </a>
           )}
+        </div>
+
+        {/* Riga tessera + certificato medico */}
+        <div className="flex flex-wrap gap-2 mt-4">
+          {/* Tipo socio + scadenza tessera */}
+          {(() => {
+            const today = new Date().toISOString().slice(0, 10);
+            const in30 = new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+            const expired = member.expires_at && member.expires_at < today;
+            const expiringSoon = member.expires_at && member.expires_at >= today && member.expires_at <= in30;
+            return (
+              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs ${
+                expired ? 'bg-red-500/10 text-red-400 border border-red-500/30' :
+                expiringSoon ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30' :
+                'bg-accent/10 text-accent border border-accent/30'
+              }`}>
+                {member.member_type === 'sostenitore' && <Heart className="h-3 w-3" />}
+                {member.member_type === 'normale' && <UserIcon className="h-3 w-3" />}
+                {member.member_type === 'con_lift' && <Wind className="h-3 w-3" />}
+                <span className="font-medium">{MEMBER_TYPE_LABELS[member.member_type as keyof typeof MEMBER_TYPE_LABELS]}</span>
+                {member.expires_at ? (
+                  <span className="text-text-dim">
+                    · {expired ? 'scaduta' : 'scade'} {formatDate(member.expires_at)}
+                  </span>
+                ) : (
+                  <span className="text-text-dim">· tessera non attivata</span>
+                )}
+              </span>
+            );
+          })()}
+
+          {/* Certificato medico (solo per non-sostenitori) */}
+          {member.member_type !== 'sostenitore' && (() => {
+            const today = new Date().toISOString().slice(0, 10);
+            const in30 = new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+            if (!member.medical_cert_received) {
+              return (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                  <AlertTriangle className="h-3 w-3" />
+                  Certificato medico mancante
+                </span>
+              );
+            }
+            const expDate = member.medical_cert_expires_at;
+            const expired = expDate && expDate < today;
+            const expiringSoon = expDate && expDate >= today && expDate <= in30;
+            return (
+              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs ${
+                expired ? 'bg-red-500/10 text-red-400 border border-red-500/30' :
+                expiringSoon ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30' :
+                'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+              }`}>
+                <CheckCircle2 className="h-3 w-3" />
+                Certificato medico
+                {expDate && (
+                  <span className="text-text-dim">
+                    · {expired ? 'scaduto' : 'scade'} {formatDate(expDate)}
+                  </span>
+                )}
+              </span>
+            );
+          })()}
         </div>
       </header>
 

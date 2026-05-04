@@ -161,15 +161,34 @@ export const memberEditSchema = z.object({
   last_name: z.string().min(1, 'Cognome obbligatorio').max(100),
   email: z.string().email('Email non valida').optional().or(z.literal('')),
   phone: z.string().optional().or(z.literal('')),
-  address_street: z.string().optional().or(z.literal('')),
-  address_number: z.string().optional().or(z.literal('')),
-  city: z.string().optional().or(z.literal('')),
-  cap: z.string().optional().or(z.literal('')),
-  birth_province: z.string().optional().or(z.literal('')),
+  address: z.string().optional().or(z.literal('')),
   fiscal_code: z.string().optional().or(z.literal('')),
   notes: z.string().optional().or(z.literal('')),
+  // Certificato medico
+  medical_cert_received: z.boolean().default(false),
+  medical_cert_expires_at: z.string().optional().or(z.literal('')),
 });
 export type MemberEditFormData = z.infer<typeof memberEditSchema>;
+
+// ============================================================================
+// RENEW MEMBERSHIP
+// ============================================================================
+export const renewMembershipSchema = z.object({
+  member_type: z.enum(['sostenitore', 'normale', 'con_lift']),
+  paid_now: z.boolean().default(true),
+  payment_method: z.enum(['contanti', 'bancomat', 'bonifico', 'altro']).default('contanti'),
+});
+export type RenewMembershipFormData = z.infer<typeof renewMembershipSchema>;
+
+// ============================================================================
+// ADJUST CREDITS (rettifica manuale lift)
+// ============================================================================
+export const adjustCreditsSchema = z.object({
+  discipline: z.enum(['kite', 'wingfoil', 'sit_kite', 'wingfoil_adattato', 'corso', 'altro']),
+  lifts_to_add: z.coerce.number().int().refine((n) => n !== 0, 'Inserisci un numero diverso da zero'),
+  reason: z.string().min(3, 'Motivazione obbligatoria (min 3 caratteri)'),
+});
+export type AdjustCreditsFormData = z.infer<typeof adjustCreditsSchema>;
 
 // ============================================================================
 // WALLET: salda uno o piu' debiti specifici
