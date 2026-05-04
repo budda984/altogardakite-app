@@ -115,7 +115,7 @@ export default function AddBookingModal({
               booking_date: date,
               session_template_id: template.id,
               preferred_discipline: s.preferred_discipline,
-              notes: s.notes || null,
+              notes: s.notes || '',
             }),
           }).then(async (r) => {
             if (!r.ok) {

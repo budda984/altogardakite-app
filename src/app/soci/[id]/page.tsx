@@ -203,33 +203,6 @@ export default async function MemberDetailPage({
           )}
         </Card>
 
-        {/* Dichiarazioni */}
-        <Card title="Dichiarazioni e consensi">
-          <ul className="space-y-2 text-sm">
-            <ConsentRow ok={member.statute_accepted} label="Statuto e regolamenti" />
-            <ConsentRow ok={member.medical_certificate} label="Certificato medico" />
-            <ConsentRow ok={member.payment_commitment} label="Impegno pagamento" />
-            <ConsentRow ok={member.photo_authorization} label="Autorizzazione foto/video" />
-            <ConsentRow ok={member.navigation_rules_accepted} label="Regole navigazione" />
-            <ConsentRow ok={member.safeguarding_acknowledged} label="Safeguarding" />
-            <ConsentRow ok={member.gdpr_consent_1a} label="GDPR 1a (istituzionale)" />
-            <ConsentRow ok={member.gdpr_consent_1b} label="GDPR 1b (promo CONI)" />
-          </ul>
-        </Card>
-
-        {/* Firme */}
-        <Card title="Firme acquisite" className="lg:col-span-2">
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <SignatureCard label="Domanda ammissione" data={member.signature_admission} />
-            <SignatureCard label="Informativa navigazione" data={member.signature_navigation} />
-            <SignatureCard label="Safeguarding" data={member.signature_safeguarding} />
-            <SignatureCard label="GDPR 1a" data={member.signature_gdpr_1a} />
-            {member.signature_gdpr_1b && (
-              <SignatureCard label="GDPR 1b" data={member.signature_gdpr_1b} />
-            )}
-          </div>
-        </Card>
-
         {/* Corsi */}
         <Card title={`Corsi ${courses?.length ? `(${courses.length})` : ''}`}>
           {courses && courses.length > 0 ? (

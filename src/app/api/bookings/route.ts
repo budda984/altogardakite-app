@@ -61,8 +61,11 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const parsed = createBookingSchema.safeParse(body);
     if (!parsed.success) {
+      const detailed = parsed.error.issues
+        .map((i) => `${i.path.join('.')}: ${i.message}`)
+        .join('; ');
       return NextResponse.json(
-        { error: 'Dati non validi', issues: parsed.error.issues },
+        { error: `Dati non validi - ${detailed}`, issues: parsed.error.issues },
         { status: 400 }
       );
     }
