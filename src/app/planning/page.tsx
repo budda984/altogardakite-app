@@ -19,7 +19,7 @@ export default async function PlanningPage({
   const [boatsRes, instructorsRes, membersRes, servicesRes] = await Promise.all([
     supabase.from('boats').select('*').eq('active', true).order('name'),
     supabase.from('instructors').select('*').eq('active', true).order('last_name'),
-    supabase.from('members').select('id,first_name,last_name,membership_number').eq('active', true).order('last_name'),
+    supabase.from('members').select('id,first_name,last_name,membership_number,member_type,active').eq('active', true).order('last_name'),
     supabase.from('services').select('*').eq('is_active', true).order('sort_order'),
   ]);
 

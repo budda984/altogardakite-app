@@ -524,3 +524,43 @@ export const OUTING_STATUS_LABELS: Record<OutingStatus, string> = {
   chiusa: 'Chiusa',
   annullata: 'Annullata',
 };
+
+// ============================================================================
+// BOOKINGS
+// ============================================================================
+export type BookingStatus = 'pending' | 'assigned' | 'cancelled';
+
+export const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
+  pending: 'In attesa',
+  assigned: 'Assegnato',
+  cancelled: 'Annullato',
+};
+
+export interface Booking {
+  id: string;
+  member_id: string;
+  booking_date: string;
+  session_template_id: string;
+  preferred_discipline: LiftDiscipline | null;
+  notes: string | null;
+  status: BookingStatus;
+  outing_id: string | null;
+  participant_id: string | null;
+  created_at: string;
+  cancelled_at: string | null;
+  cancellation_reason: string | null;
+}
+
+export interface BookingWithMember extends Booking {
+  first_name: string;
+  last_name: string;
+  membership_number: number;
+  member_type: MemberType;
+  expires_at: string | null;
+  medical_cert_received: boolean;
+  medical_cert_expires_at: string | null;
+  template_name: string;
+  template_wind_session: string | null;
+  default_departure_time: string;
+  default_return_time: string;
+}

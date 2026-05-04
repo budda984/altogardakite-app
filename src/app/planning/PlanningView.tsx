@@ -22,6 +22,7 @@ import AddParticipantModal from './AddParticipantModal';
 import GenerateDayModal from './GenerateDayModal';
 import EditOutingModal from './EditOutingModal';
 import CancelOutingModal from './CancelOutingModal';
+import BookingsView from './BookingsView';
 
 interface OutingParticipant {
   id: string;
@@ -91,6 +92,9 @@ export default function PlanningView({
   const [editOutingFor, setEditOutingFor] = useState<OutingFull | null>(null);
   const [cancelOutingFor, setCancelOutingFor] = useState<OutingFull | null>(null);
   const [showGenerate, setShowGenerate] = useState(false);
+
+  // Vista corrente: prenotazioni (lista persone per slot) o uscite (vista per barca)
+  const [view, setView] = useState<'bookings' | 'outings'>('bookings');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -276,11 +280,59 @@ export default function PlanningView({
         </button>
       </div>
 
-      {loading ? (
+      {/* TAB SWITCHER: Prenotazioni / Uscite barca */}
+      <div className="flex gap-2 mb-4 border-b border-border">
+        <button
+          onClick={() => setView('bookings')}
+          className={cn(
+            'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
+            view === 'bookings'
+              ? 'border-accent text-accent'
+              : 'border-transparent text-text-muted hover:text-text'
+          )}
+        >
+          Prenotazioni
+        </button>
+        <button
+          onClick={() => setView('outings')}
+          className={cn(
+            'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
+            view === 'outings'
+              ? 'border-accent text-accent'
+              : 'border-transparent text-text-muted hover:text-text'
+          )}
+        >
+          Uscite barca
+          {outings.length > 0 && (
+            <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-bg-elevated text-text-muted">
+              {outings.length}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {view === 'bookings' && (
+        <BookingsView
+          date={date}
+          templates={templates}
+          boats={boats}
+          instructors={instructors}
+          members={members.filter((m) => {
+            const mm = m as { active?: boolean; member_type?: string };
+            return mm.active !== false && mm.member_type !== 'sostenitore';
+          })}
+          onOutingCreated={() => {
+            load();
+            setView('outings');
+          }}
+        />
+      )}
+
+      {view === 'outings' && loading ? (
         <div className="p-12 text-center bg-bg-surface border border-border rounded-lg">
           <Loader2 className="h-6 w-6 animate-spin mx-auto text-text-muted" />
         </div>
-      ) : (
+      ) : view === 'outings' ? (
         <div className="space-y-6">
           {/* Sessioni dei template attivi */}
           {templates
@@ -363,7 +415,7 @@ export default function PlanningView({
             </div>
           )}
         </div>
-      )}
+      ) : null}
 
       {/* Modali */}
       {addOutingFor && (
