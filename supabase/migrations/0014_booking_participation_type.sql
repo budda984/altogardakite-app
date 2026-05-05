@@ -103,8 +103,11 @@ $$;
 
 -- ----------------------------------------------------------------------------
 -- Aggiorna view bookings_with_member per includere participation_type
+-- (drop + create perche' la nuova colonna va inserita in posizione intermedia)
 -- ----------------------------------------------------------------------------
-create or replace view bookings_with_member as
+drop view if exists bookings_with_member;
+
+create view bookings_with_member as
 select
   b.id,
   b.member_id,
