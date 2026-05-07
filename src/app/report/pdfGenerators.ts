@@ -10,9 +10,6 @@ function formatDate(iso: string): string {
   const d = new Date(iso + (iso.includes('T') ? '' : 'T12:00:00'));
   return d.toLocaleDateString('it-IT');
 }
-function formatCurrency(amount: number): string {
-  return `€ ${Number(amount).toFixed(2)}`;
-}
 function formatRange(from: string, to: string): string {
   if (from === to) return formatDate(from);
   return `${formatDate(from)} → ${formatDate(to)}`;
@@ -28,21 +25,16 @@ const STATUS_LABELS: Record<string, string> = {
 const PARTECIPATION_LABELS: Record<string, string> = {
   corso: 'Corso', lift_supervisionato: 'Lift assistito', lift_semplice: 'Lift',
 };
-const PAYMENT_METHOD_LABELS: Record<string, string> = {
-  contanti: 'Contanti', bancomat: 'POS/Bancomat', bonifico: 'Bonifico', altro: 'Altro',
-};
 
 /** Setup standard del PDF: header con logo testuale e footer con paginazione */
 function setupDoc(title: string, period: string): jsPDF {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
-  // Header
   doc.setFontSize(10);
   doc.setTextColor(100, 100, 100);
   doc.text('A.S.D. ALTO GARDA KITE', 14, 12);
   doc.text(`Report generato: ${new Date().toLocaleString('it-IT')}`, 14, 17, { align: 'left' });
 
-  // Title
   doc.setFontSize(18);
   doc.setTextColor(0, 0, 0);
   doc.text(title, 14, 28);
@@ -51,7 +43,6 @@ function setupDoc(title: string, period: string): jsPDF {
   doc.setTextColor(100, 100, 100);
   doc.text(`Periodo: ${period}`, 14, 34);
 
-  // Linea separatore
   doc.setDrawColor(220, 220, 220);
   doc.line(14, 38, 196, 38);
 
@@ -74,8 +65,15 @@ function downloadPdf(doc: jsPDF, filename: string) {
   doc.save(filename);
 }
 
+function computeMinutes(departure: string | null, ret: string | null): number {
+  if (!departure || !ret) return 0;
+  const [dh, dm] = departure.split(':').map(Number);
+  const [rh, rm] = ret.split(':').map(Number);
+  return (rh * 60 + rm) - (dh * 60 + dm);
+}
+
 // ============================================================================
-// SEASON / RIASSUNTO PERIODO
+// SEASON / RIASSUNTO PERIODO (no prezzi)
 // ============================================================================
 type SeasonData = {
   period: { from: string; to: string };
@@ -84,22 +82,18 @@ type SeasonData = {
     by_discipline: Record<string, number>;
     by_boat: { name: string; count: number }[];
   };
-  cashflow: {
-    income_received: number;
-    outstanding: number;
-    by_payment_method: Record<string, number>;
-  };
   members_active: number;
+  total_participants?: number;
+  total_lifts_consumed?: number;
 };
 
 export function generateSeasonReport(data: SeasonData) {
   const doc = setupDoc('Riassunto periodo', formatRange(data.period.from, data.period.to));
   let y = 48;
 
-  // KPI box
   doc.setFontSize(11);
   doc.setTextColor(0, 0, 0);
-  doc.text('Sintesi', 14, y);
+  doc.text('Sintesi attivita', 14, y);
   y += 6;
 
   autoTable(doc, {
@@ -111,8 +105,8 @@ export function generateSeasonReport(data: SeasonData) {
       ['  di cui chiuse', String(data.outings.closed)],
       ['  di cui annullate', String(data.outings.cancelled)],
       ['  di cui ancora bozza', String(data.outings.draft)],
-      ['Incassato', formatCurrency(data.cashflow.income_received)],
-      ['Da incassare', formatCurrency(data.cashflow.outstanding)],
+      ...(data.total_participants !== undefined ? [['Partecipazioni complessive', String(data.total_participants)]] : []),
+      ...(data.total_lifts_consumed !== undefined ? [['Lift / lezioni consumate', String(data.total_lifts_consumed)]] : []),
     ],
     theme: 'striped',
     headStyles: { fillColor: [93, 206, 170] },
@@ -120,7 +114,6 @@ export function generateSeasonReport(data: SeasonData) {
   });
   y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
 
-  // Per disciplina
   if (Object.keys(data.outings.by_discipline).length > 0) {
     doc.setFontSize(11);
     doc.text('Uscite per disciplina', 14, y);
@@ -138,7 +131,6 @@ export function generateSeasonReport(data: SeasonData) {
     y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
   }
 
-  // Per barca
   if (data.outings.by_boat.length > 0) {
     doc.setFontSize(11);
     doc.text('Uscite per imbarcazione', 14, y);
@@ -151,56 +143,39 @@ export function generateSeasonReport(data: SeasonData) {
       headStyles: { fillColor: [93, 206, 170] },
       margin: { left: 14, right: 14 },
     });
-    y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
-  }
-
-  // Per metodo pagamento
-  if (Object.keys(data.cashflow.by_payment_method).length > 0) {
-    doc.setFontSize(11);
-    doc.text('Incassi per metodo', 14, y);
-    y += 6;
-    autoTable(doc, {
-      startY: y,
-      head: [['Metodo', 'Importo incassato']],
-      body: Object.entries(data.cashflow.by_payment_method)
-        .sort(([, a], [, b]) => b - a)
-        .map(([m, amount]) => [PAYMENT_METHOD_LABELS[m] || m, formatCurrency(amount)]),
-      theme: 'striped',
-      headStyles: { fillColor: [93, 206, 170] },
-      margin: { left: 14, right: 14 },
-    });
   }
 
   downloadPdf(doc, `riassunto_${data.period.from}_${data.period.to}.pdf`);
 }
 
 // ============================================================================
-// MEMBER REPORT
+// MEMBER REPORT (no prezzi)
 // ============================================================================
 type MemberData = {
   period: { from: string; to: string };
   member: {
     first_name: string; last_name: string; membership_number: number;
     fiscal_code: string | null; email: string | null; phone: string | null;
+    member_type?: string;
   };
   participations: { participation_type: string; rental_type: string; outings: { outing_date: string; status: string; discipline: string | null; boat: { name: string } | { name: string }[] | null }[] | { outing_date: string; status: string; discipline: string | null; boat: { name: string } | { name: string }[] | null } }[];
   movements: {
     movement_date: string; movement_type: string; description: string;
-    amount: number; paid: boolean; payment_method: string | null;
+    lift_delta: number; lift_discipline: string | null;
   }[];
   packages: {
-    service_name_snapshot: string; total_price: number;
+    service_name_snapshot: string;
     lifts_total: number; lifts_used: number;
     is_subscription: boolean; valid_from: string | null; valid_until: string | null;
-    created_at: string;
+    created_at: string; discipline: string | null;
   }[];
   active_subscriptions: {
     service_name_snapshot: string; discipline: string;
     valid_from: string; valid_until: string; days_remaining: number;
   }[];
   summary: {
-    total_paid: number; total_outstanding: number;
-    lifts_consumed: number; participations_count: number;
+    lifts_consumed: number;
+    participations_count: number;
   };
 };
 
@@ -212,7 +187,6 @@ export function generateMemberReport(data: MemberData) {
   );
   let y = 48;
 
-  // Anagrafica sintetica
   doc.setFontSize(10);
   doc.setTextColor(100, 100, 100);
   doc.text(`Tessera #${data.member.membership_number}`, 14, y);
@@ -220,7 +194,6 @@ export function generateMemberReport(data: MemberData) {
   if (data.member.phone) doc.text(`Telefono: ${data.member.phone}`, 14, y + 10);
   y += 18;
 
-  // Sintesi
   doc.setFontSize(11);
   doc.setTextColor(0, 0, 0);
   doc.text('Sintesi periodo', 14, y);
@@ -229,10 +202,8 @@ export function generateMemberReport(data: MemberData) {
     startY: y,
     head: [['Metrica', 'Valore']],
     body: [
-      ['Partecipazioni', String(data.summary.participations_count)],
-      ['Lift consumati', String(data.summary.lifts_consumed)],
-      ['Totale pagato', formatCurrency(data.summary.total_paid)],
-      ['Da incassare', formatCurrency(data.summary.total_outstanding)],
+      ['Partecipazioni a uscite', String(data.summary.participations_count)],
+      ['Lift / lezioni consumate', String(data.summary.lifts_consumed)],
     ],
     theme: 'striped',
     headStyles: { fillColor: [93, 206, 170] },
@@ -240,7 +211,6 @@ export function generateMemberReport(data: MemberData) {
   });
   y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
 
-  // Abbonamenti attivi
   if (data.active_subscriptions.length > 0) {
     doc.setFontSize(11);
     doc.text('Abbonamenti stagionali attivi', 14, y);
@@ -261,19 +231,18 @@ export function generateMemberReport(data: MemberData) {
     y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
   }
 
-  // Pacchetti acquistati nel periodo
   if (data.packages.length > 0) {
     doc.setFontSize(11);
     doc.text('Pacchetti acquistati nel periodo', 14, y);
     y += 6;
     autoTable(doc, {
       startY: y,
-      head: [['Data', 'Pacchetto', 'Lift usati / totali', 'Prezzo']],
+      head: [['Data', 'Pacchetto', 'Disciplina', 'Lift / Lezioni']],
       body: data.packages.map((p) => [
         formatDate(p.created_at),
         p.service_name_snapshot + (p.is_subscription ? ' (abbonamento)' : ''),
+        p.discipline ? (DISCIPLINE_LABELS[p.discipline] || p.discipline) : '—',
         p.is_subscription ? '∞' : `${p.lifts_used} / ${p.lifts_total}`,
-        formatCurrency(p.total_price),
       ]),
       theme: 'striped',
       headStyles: { fillColor: [93, 206, 170] },
@@ -282,19 +251,20 @@ export function generateMemberReport(data: MemberData) {
     y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
   }
 
-  // Movimenti
-  if (data.movements.length > 0) {
+  // Movimenti: solo quelli con lift_delta != 0 (escludo gli addebiti puramente economici)
+  const liftMovements = data.movements.filter((m) => Number(m.lift_delta) !== 0 || m.movement_type === 'correzione');
+  if (liftMovements.length > 0) {
     doc.setFontSize(11);
-    doc.text('Movimenti contabili', 14, y);
+    doc.text('Storico lift / lezioni', 14, y);
     y += 6;
     autoTable(doc, {
       startY: y,
-      head: [['Data', 'Descrizione', 'Importo', 'Stato']],
-      body: data.movements.map((m) => [
+      head: [['Data', 'Descrizione', 'Disciplina', 'Variazione']],
+      body: liftMovements.map((m) => [
         formatDate(m.movement_date),
         m.description,
-        formatCurrency(Math.abs(Number(m.amount))) + (Number(m.amount) < 0 ? ' (debito)' : ''),
-        m.paid ? 'Pagato' : 'Da incassare',
+        m.lift_discipline ? (DISCIPLINE_LABELS[m.lift_discipline] || m.lift_discipline) : '—',
+        m.lift_delta > 0 ? `+${m.lift_delta}` : String(m.lift_delta),
       ]),
       theme: 'striped',
       headStyles: { fillColor: [93, 206, 170] },
@@ -307,7 +277,7 @@ export function generateMemberReport(data: MemberData) {
 }
 
 // ============================================================================
-// BOAT REPORT
+// BOAT REPORT (no prezzi)
 // ============================================================================
 type BoatData = {
   period: { from: string; to: string };
@@ -322,7 +292,6 @@ type BoatData = {
   summary: {
     total_outings: number; closed: number; cancelled: number;
     total_participants: number; total_hours: number;
-    revenue_generated: number;
   };
 };
 
@@ -338,7 +307,6 @@ export function generateBoatReport(data: BoatData) {
   doc.text(`Tipo: ${data.boat.boat_type}${data.boat.capacity ? ` · Capienza: ${data.boat.capacity}` : ''}`, 14, y);
   y += 10;
 
-  // Sintesi
   doc.setFontSize(11);
   doc.setTextColor(0, 0, 0);
   doc.text('Sintesi periodo', 14, y);
@@ -352,7 +320,6 @@ export function generateBoatReport(data: BoatData) {
       ['  di cui annullate', String(data.summary.cancelled)],
       ['Partecipanti complessivi', String(data.summary.total_participants)],
       ['Ore di utilizzo', `${data.summary.total_hours} h`],
-      ['Ricavi generati', formatCurrency(data.summary.revenue_generated)],
     ],
     theme: 'striped',
     headStyles: { fillColor: [93, 206, 170] },
@@ -360,7 +327,6 @@ export function generateBoatReport(data: BoatData) {
   });
   y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
 
-  // Lista uscite
   if (data.outings.length > 0) {
     doc.setFontSize(11);
     doc.text('Dettaglio uscite', 14, y);
@@ -398,7 +364,7 @@ export function generateBoatReport(data: BoatData) {
 }
 
 // ============================================================================
-// INSTRUCTOR REPORT
+// INSTRUCTOR REPORT (no prezzi)
 // ============================================================================
 type InstructorData = {
   period: { from: string; to: string };
@@ -429,7 +395,6 @@ export function generateInstructorReport(data: InstructorData) {
   doc.text(`Ruolo: ${data.instructor.role}`, 14, y);
   y += 10;
 
-  // Sintesi
   doc.setFontSize(11);
   doc.setTextColor(0, 0, 0);
   doc.text('Sintesi periodo', 14, y);
@@ -481,7 +446,7 @@ export function generateInstructorReport(data: InstructorData) {
 }
 
 // ============================================================================
-// DAY REPORT
+// DAY REPORT (invariato — gia non aveva prezzi)
 // ============================================================================
 type DayData = {
   period: { from: string; to: string };
@@ -513,7 +478,6 @@ export function generateDayReport(data: DayData) {
   }
 
   for (const o of data.outings) {
-    // Avoid splitting a session across pages: nuova pagina se y troppo basso
     if (y > 230) {
       doc.addPage();
       y = 20;

@@ -1,215 +1,308 @@
 import Link from 'next/link';
-import {
-  Euro, AlertCircle, Users, Sailboat, Receipt, TrendingUp,
-  ChevronRight, Calendar, Sparkles,
-} from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
-import { formatDate } from '@/lib/utils';
+import {
+  BarChart3, FileText, Sailboat, Users, Wind, GraduationCap,
+  XCircle, CheckCircle2, Clock, ArrowRight,
+} from 'lucide-react';
+import { DISCIPLINE_LABELS } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
 export default async function StatistichePage() {
   const supabase = await createClient();
-
-  const yearStart = `${new Date().getFullYear()}-01-01`;
-  const monthStart = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-01`;
+  const today = new Date();
+  const yearStart = `${today.getFullYear()}-01-01`;
+  const monthStart = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
 
   const [
     membersRes,
-    outingsRes,
-    monthOutingsRes,
-    receivedYearRes,
-    receivedMonthRes,
-    outstandingRes,
-    activeSubsCountRes,
-    topUnpaidRes,
+    outingsYearRes,
+    outingsMonthRes,
+    movementsRes,
   ] = await Promise.all([
     // Soci attivi
-    supabase.from('members').select('id', { count: 'exact', head: true }).eq('active', true),
-    // Uscite anno
-    supabase.from('outings').select('id', { count: 'exact', head: true }).gte('outing_date', yearStart),
-    // Uscite mese
-    supabase.from('outings').select('id', { count: 'exact', head: true }).gte('outing_date', monthStart),
-    // Incassato anno: somma movimenti positivi pagati non stornati
-    supabase.from('movements')
-      .select('amount')
-      .eq('is_reversed', false)
-      .eq('paid', true)
-      .gt('amount', 0)
-      .gte('movement_date', yearStart),
-    // Incassato mese
-    supabase.from('movements')
-      .select('amount')
-      .eq('is_reversed', false)
-      .eq('paid', true)
-      .gt('amount', 0)
-      .gte('movement_date', monthStart),
-    // Sospeso totale: debiti aperti
-    supabase.from('member_open_debts').select('amount_due'),
-    // Abbonamenti stagionali attivi
-    supabase.from('member_active_subscriptions').select('package_id', { count: 'exact', head: true }),
-    // I 10 debiti aperti più vecchi
+    supabase.from('members').select('id, member_type, active').eq('active', true),
+    // Uscite anno corrente
     supabase
-      .from('member_open_debts')
-      .select('movement_id, amount_due, movement_date, description, member_id, boat_name, outing_date')
-      .order('movement_date', { ascending: true })
-      .limit(10),
+      .from('outings')
+      .select('id, outing_date, status, discipline, boat_id, departure_time, return_time, boats(name)')
+      .gte('outing_date', yearStart),
+    // Uscite mese corrente
+    supabase
+      .from('outings')
+      .select('id, status', { count: 'exact', head: false })
+      .gte('outing_date', monthStart),
+    // Movimenti per contare lift consumati e lezioni
+    supabase
+      .from('movements')
+      .select('lift_delta, lift_discipline, movement_type, member_id')
+      .eq('is_reversed', false)
+      .gte('movement_date', yearStart),
   ]);
 
-  const totalMembers = membersRes.count || 0;
-  const yearOutings = outingsRes.count || 0;
-  const monthOutings = monthOutingsRes.count || 0;
-  const activeSubs = activeSubsCountRes.count || 0;
+  const members = membersRes.data || [];
+  const outings = outingsYearRes.data || [];
+  const outingsMonth = outingsMonthRes.data || [];
+  const movements = movementsRes.data || [];
 
-  const sumAmount = (rows: { amount: number }[] | null) =>
-    (rows || []).reduce((acc, r) => acc + Number(r.amount), 0);
-  const sumDue = (rows: { amount_due: number }[] | null) =>
-    (rows || []).reduce((acc, r) => acc + Number(r.amount_due), 0);
+  // Aggregazioni soci
+  const membersByType: Record<string, number> = { sostenitore: 0, normale: 0, con_lift: 0 };
+  members.forEach((m) => {
+    membersByType[m.member_type] = (membersByType[m.member_type] || 0) + 1;
+  });
 
-  const yearReceived = sumAmount(receivedYearRes.data);
-  const monthReceived = sumAmount(receivedMonthRes.data);
-  const outstanding = sumDue(outstandingRes.data);
+  // Aggregazioni uscite
+  const outingsByStatus = { bozza: 0, chiusa: 0, annullata: 0 };
+  outings.forEach((o) => {
+    if (o.status in outingsByStatus) {
+      outingsByStatus[o.status as keyof typeof outingsByStatus]++;
+    }
+  });
 
-  // Recupero i nomi dei soci per i top unpaid
-  const topUnpaid = topUnpaidRes.data || [];
-  const memberIds = Array.from(new Set(topUnpaid.map((d) => d.member_id).filter(Boolean) as string[]));
-  let memberMap: Record<string, { first_name: string; last_name: string }> = {};
-  if (memberIds.length > 0) {
-    const { data: mems } = await supabase
-      .from('members')
-      .select('id, first_name, last_name')
-      .in('id', memberIds);
-    (mems || []).forEach((m) => {
-      memberMap[m.id] = { first_name: m.first_name, last_name: m.last_name };
-    });
-  }
+  const outingsMonthByStatus = { chiusa: 0, annullata: 0, bozza: 0 };
+  outingsMonth.forEach((o) => {
+    if (o.status in outingsMonthByStatus) {
+      outingsMonthByStatus[o.status as keyof typeof outingsMonthByStatus]++;
+    }
+  });
+
+  // Aggregazione per disciplina
+  const byDiscipline: Record<string, number> = {};
+  outings.forEach((o) => {
+    if (o.status === 'chiusa') {
+      const d = o.discipline || 'altro';
+      byDiscipline[d] = (byDiscipline[d] || 0) + 1;
+    }
+  });
+
+  // Per barca
+  const byBoat: Record<string, { name: string; count: number }> = {};
+  outings.forEach((o) => {
+    if (o.status === 'chiusa' && o.boat_id) {
+      const boatRel = o.boats as { name: string } | { name: string }[] | null;
+      const name = Array.isArray(boatRel) ? boatRel[0]?.name : boatRel?.name;
+      if (!byBoat[o.boat_id]) byBoat[o.boat_id] = { name: name || '?', count: 0 };
+      byBoat[o.boat_id].count += 1;
+    }
+  });
+
+  // Ore di navigazione totali (chiuse)
+  let totalMinutes = 0;
+  outings.forEach((o) => {
+    if (o.status !== 'chiusa') return;
+    if (!o.departure_time || !o.return_time) return;
+    const [dh, dm] = o.departure_time.split(':').map(Number);
+    const [rh, rm] = o.return_time.split(':').map(Number);
+    totalMinutes += (rh * 60 + rm) - (dh * 60 + dm);
+  });
+
+  // Lift consumati per disciplina
+  const liftsByDiscipline: Record<string, number> = {};
+  let totalLifts = 0;
+  let totalLessons = 0;
+  movements.forEach((m) => {
+    if (m.lift_delta === -1 && m.lift_discipline) {
+      liftsByDiscipline[m.lift_discipline] = (liftsByDiscipline[m.lift_discipline] || 0) + 1;
+      totalLifts++;
+      if (m.lift_discipline === 'corso') totalLessons++;
+    }
+  });
 
   return (
-    <div className="p-6 lg:p-10 max-w-7xl pb-24 lg:pb-10">
-      <div className="mb-8">
-        <h1 className="font-display text-3xl font-bold tracking-tight">Statistiche</h1>
+    <div className="p-6 lg:p-10 max-w-6xl">
+      <header className="mb-8">
+        <div className="text-xs uppercase tracking-widest text-text-dim mb-2">Reportistica</div>
+        <h1 className="font-display text-3xl lg:text-4xl font-bold tracking-tightest flex items-center gap-3">
+          <BarChart3 className="h-7 w-7 text-accent" />
+          Statistiche
+        </h1>
         <p className="text-sm text-text-muted mt-1">
-          Panoramica annuale e situazione pagamenti
+          Anno corrente {today.getFullYear()} - dati aggiornati al {today.toLocaleDateString('it-IT')}
         </p>
-      </div>
+      </header>
 
-      {/* KPI cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      {/* KPI principali */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
         <KpiCard
-          label="Incassato anno"
-          value={`€ ${yearReceived.toFixed(2)}`}
-          sub={`Mese in corso: € ${monthReceived.toFixed(2)}`}
-          icon={TrendingUp}
-          color="emerald"
-        />
-        <KpiCard
-          label="Da incassare"
-          value={`€ ${outstanding.toFixed(2)}`}
-          sub={outstanding > 0 ? 'Debiti aperti totali' : 'Nessun sospeso'}
-          icon={AlertCircle}
-          color={outstanding > 0 ? 'amber' : 'zinc'}
-        />
-        <KpiCard
-          label="Soci attivi"
-          value={String(totalMembers)}
-          sub={`${activeSubs} con abbonamento stagionale`}
           icon={Users}
-          color="accent"
+          label="Soci attivi"
+          value={members.length}
+          sublabel={`${membersByType.sostenitore} sostenitori, ${membersByType.normale} normali, ${membersByType.con_lift} con lift`}
         />
         <KpiCard
-          label="Uscite anno"
-          value={String(yearOutings)}
-          sub={`Mese in corso: ${monthOutings}`}
           icon={Sailboat}
-          color="accent"
+          label="Uscite anno"
+          value={outings.length}
+          sublabel={`${outingsByStatus.chiusa} chiuse, ${outingsByStatus.annullata} annullate`}
+        />
+        <KpiCard
+          icon={Clock}
+          label="Ore navigazione"
+          value={Math.round((totalMinutes / 60) * 10) / 10}
+          sublabel="(uscite chiuse)"
+        />
+        <KpiCard
+          icon={Wind}
+          label="Lift consumati"
+          value={totalLifts}
+          sublabel={`${totalLessons} lezioni corso`}
         />
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-6">
-        {/* Top sospesi */}
-        <div className="bg-bg-surface border border-border rounded-lg overflow-hidden lg:col-span-2">
-          <div className="p-5 border-b border-border">
-            <h2 className="font-display text-lg font-semibold tracking-tight flex items-center gap-2">
-              <AlertCircle className="h-5 w-5 text-amber-400" />
-              Pagamenti in sospeso
-            </h2>
-            <p className="text-xs text-text-muted mt-1">
-              I 10 debiti più vecchi non ancora saldati
-            </p>
-          </div>
-          {topUnpaid.length === 0 ? (
-            <div className="p-8 text-center text-text-muted text-sm">
-              Nessun debito aperto. 🎉
-            </div>
-          ) : (
-            <div className="divide-y divide-border">
-              {topUnpaid.map((row) => {
-                const member = row.member_id ? memberMap[row.member_id] : null;
-                return (
-                  <Link
-                    key={row.movement_id}
-                    href={row.member_id ? `/soci/${row.member_id}` : '#'}
-                    className="p-4 flex items-center gap-3 hover:bg-bg-elevated/50 transition-colors"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="font-medium text-text">
-                        {member ? `${member.last_name} ${member.first_name}` : 'Socio sconosciuto'}
-                      </div>
-                      <div className="text-xs text-text-muted mt-0.5">
-                        {row.description}
-                      </div>
-                      <div className="text-[10px] text-text-dim mt-0.5 flex items-center gap-2 flex-wrap">
-                        <Calendar className="h-3 w-3" />
-                        {formatDate(row.movement_date)}
-                        {row.boat_name && (
-                          <>
-                            <span>·</span>
-                            <span>{row.boat_name}</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <div className="font-display font-semibold text-amber-400 flex items-center gap-1 justify-end">
-                        <Euro className="h-3.5 w-3.5" />
-                        {Number(row.amount_due).toFixed(2)}
-                      </div>
-                    </div>
-                    <ChevronRight className="h-4 w-4 text-text-dim shrink-0" />
-                  </Link>
-                );
-              })}
-            </div>
-          )}
+      {/* Mese corrente */}
+      <section className="mb-8">
+        <h2 className="text-xs uppercase tracking-widest text-text-dim mb-3">
+          Mese corrente ({today.toLocaleDateString('it-IT', { month: 'long' })})
+        </h2>
+        <div className="grid grid-cols-3 gap-3">
+          <MiniStat label="Chiuse" value={outingsMonthByStatus.chiusa} icon={CheckCircle2} color="emerald" />
+          <MiniStat label="Bozze" value={outingsMonthByStatus.bozza} icon={Clock} color="amber" />
+          <MiniStat label="Annullate" value={outingsMonthByStatus.annullata} icon={XCircle} color="red" />
         </div>
+      </section>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        {/* Per disciplina (grafico a barre orizzontale) */}
+        <section>
+          <h2 className="text-xs uppercase tracking-widest text-text-dim mb-3">
+            Uscite per disciplina
+          </h2>
+          <div className="bg-bg-surface border border-border rounded-lg p-4">
+            {Object.keys(byDiscipline).length === 0 ? (
+              <p className="text-text-muted text-sm">Nessuna uscita chiusa</p>
+            ) : (
+              <BarChart data={Object.entries(byDiscipline)
+                .map(([k, v]) => ({ label: DISCIPLINE_LABELS[k as keyof typeof DISCIPLINE_LABELS] || k, value: v }))
+                .sort((a, b) => b.value - a.value)} />
+            )}
+          </div>
+        </section>
+
+        {/* Per barca */}
+        <section>
+          <h2 className="text-xs uppercase tracking-widest text-text-dim mb-3">
+            Uscite per imbarcazione
+          </h2>
+          <div className="bg-bg-surface border border-border rounded-lg p-4">
+            {Object.keys(byBoat).length === 0 ? (
+              <p className="text-text-muted text-sm">Nessuna uscita chiusa</p>
+            ) : (
+              <BarChart data={Object.values(byBoat)
+                .map((b) => ({ label: b.name, value: b.count }))
+                .sort((a, b) => b.value - a.value)} />
+            )}
+          </div>
+        </section>
       </div>
+
+      {/* Lift residui per disciplina */}
+      {Object.keys(liftsByDiscipline).length > 0 && (
+        <section className="mb-8">
+          <h2 className="text-xs uppercase tracking-widest text-text-dim mb-3">
+            Lift consumati per disciplina (anno)
+          </h2>
+          <div className="bg-bg-surface border border-border rounded-lg p-4">
+            <BarChart data={Object.entries(liftsByDiscipline)
+              .map(([k, v]) => ({ label: DISCIPLINE_LABELS[k as keyof typeof DISCIPLINE_LABELS] || k, value: v }))
+              .sort((a, b) => b.value - a.value)} />
+          </div>
+        </section>
+      )}
+
+      {/* Sezione Report PDF */}
+      <section>
+        <div className="bg-gradient-to-br from-accent/5 to-bg-surface border border-accent/30 rounded-lg p-5">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <h2 className="text-lg font-display font-semibold text-text flex items-center gap-2">
+                <FileText className="h-5 w-5 text-accent" />
+                Report PDF
+              </h2>
+              <p className="text-sm text-text-muted mt-1">
+                Genera report dettagliati in PDF: per socio, per barca, per istruttore, per giorno o riassunto periodo
+              </p>
+            </div>
+            <Link
+              href="/report"
+              className="inline-flex items-center gap-2 bg-accent text-bg px-4 py-2.5 rounded-md text-sm font-medium hover:bg-accent-hover transition-colors"
+            >
+              <FileText className="h-4 w-4" />
+              Apri Report
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
 
+// ============================================================================
+// SUB-COMPONENTS
+// ============================================================================
+
 function KpiCard({
-  label, value, sub, icon: Icon, color,
+  icon: Icon, label, value, sublabel,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: number | string;
+  sublabel?: string;
+}) {
+  return (
+    <div className="bg-bg-surface border border-border rounded-lg p-4">
+      <div className="flex items-center gap-2 text-text-muted mb-1">
+        <Icon className="h-4 w-4" />
+        <span className="text-xs uppercase tracking-wide">{label}</span>
+      </div>
+      <div className="font-display text-2xl font-bold">{value}</div>
+      {sublabel && <div className="text-[10px] text-text-dim mt-1">{sublabel}</div>}
+    </div>
+  );
+}
+
+function MiniStat({
+  label, value, icon: Icon, color,
 }: {
   label: string;
-  value: string;
-  sub?: string;
-  icon: typeof Euro;
-  color: 'emerald' | 'amber' | 'accent' | 'zinc';
+  value: number;
+  icon: React.ComponentType<{ className?: string }>;
+  color: 'emerald' | 'amber' | 'red';
 }) {
   const colorClasses = {
-    emerald: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400',
-    amber: 'bg-amber-500/10 border-amber-500/30 text-amber-400',
-    accent: 'bg-accent/10 border-accent/30 text-accent',
-    zinc: 'bg-bg-elevated border-border text-text-muted',
+    emerald: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
+    amber: 'bg-amber-500/10 text-amber-400 border-amber-500/30',
+    red: 'bg-red-500/10 text-red-400 border-red-500/30',
   };
   return (
-    <div className={`p-5 rounded-lg border ${colorClasses[color]}`}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="text-[10px] uppercase tracking-widest opacity-80">{label}</div>
-        <Icon className="h-4 w-4 opacity-70" />
+    <div className={`rounded-lg border p-3 ${colorClasses[color]}`}>
+      <div className="flex items-center gap-1.5 text-xs mb-1">
+        <Icon className="h-3.5 w-3.5" />
+        {label}
       </div>
-      <div className="font-display text-2xl font-bold mt-2">{value}</div>
-      {sub && <div className="text-xs mt-1 opacity-70">{sub}</div>}
+      <div className="font-display text-xl font-bold">{value}</div>
+    </div>
+  );
+}
+
+function BarChart({ data }: { data: { label: string; value: number }[] }) {
+  const max = Math.max(...data.map((d) => d.value), 1);
+  return (
+    <div className="space-y-2">
+      {data.map((d) => (
+        <div key={d.label}>
+          <div className="flex items-center justify-between text-xs text-text-muted mb-0.5">
+            <span>{d.label}</span>
+            <span className="font-mono">{d.value}</span>
+          </div>
+          <div className="h-2 bg-bg-elevated rounded-full overflow-hidden">
+            <div
+              className="h-full bg-accent rounded-full transition-all"
+              style={{ width: `${(d.value / max) * 100}%` }}
+            />
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

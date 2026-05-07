@@ -5,12 +5,8 @@ import { getAuth } from '@/lib/auth';
 /**
  * GET /api/report?type=X&from=YYYY-MM-DD&to=YYYY-MM-DD&id=XXX
  *
- * type:
- *   - season       : riassunto generale del periodo
- *   - member       : statistiche del singolo socio (richiede id)
- *   - boat         : statistiche della singola barca (richiede id)
- *   - instructor   : statistiche del singolo istruttore (richiede id)
- *   - day          : tutte le sessioni di un singolo giorno (from = to = data)
+ * Tipi: season | member | boat | instructor | day
+ * Versione SENZA prezzi: focus su attivita, lift, partecipazioni.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -31,9 +27,7 @@ export async function GET(request: NextRequest) {
 
     const supabase = await createClient();
 
-    if (type === 'season') {
-      return await reportSeason(supabase, from, to);
-    }
+    if (type === 'season') return await reportSeason(supabase, from, to);
     if (type === 'member') {
       if (!id) return NextResponse.json({ error: 'id socio obbligatorio' }, { status: 400 });
       return await reportMember(supabase, id, from, to);
@@ -46,9 +40,7 @@ export async function GET(request: NextRequest) {
       if (!id) return NextResponse.json({ error: 'id istruttore obbligatorio' }, { status: 400 });
       return await reportInstructor(supabase, id, from, to);
     }
-    if (type === 'day') {
-      return await reportDay(supabase, from);
-    }
+    if (type === 'day') return await reportDay(supabase, from);
     return NextResponse.json({ error: 'Tipo report non valido' }, { status: 400 });
   } catch (e) {
     return NextResponse.json(
@@ -61,59 +53,55 @@ export async function GET(request: NextRequest) {
 type SB = Awaited<ReturnType<typeof createClient>>;
 
 async function reportSeason(supabase: SB, from: string, to: string) {
-  const [outingsRes, movementsRes, membersRes, paymentsByMethodRes] = await Promise.all([
+  const [outingsRes, movementsRes, membersRes] = await Promise.all([
     supabase.from('outings').select('id, status, outing_date, discipline, boat_id, boats(name)')
       .gte('outing_date', from).lte('outing_date', to),
-    supabase.from('movements').select('amount, paid, movement_type, lift_discipline, movement_date')
+    supabase.from('movements').select('lift_delta')
       .eq('is_reversed', false)
       .gte('movement_date', from).lte('movement_date', to + 'T23:59:59'),
     supabase.from('members').select('id', { count: 'exact', head: true }).eq('active', true),
-    supabase.from('movements').select('amount, payment_method')
-      .eq('is_reversed', false).eq('paid', true).gt('amount', 0)
-      .gte('movement_date', from).lte('movement_date', to + 'T23:59:59'),
   ]);
 
   const outings = outingsRes.data || [];
   const movements = movementsRes.data || [];
-  const payments = paymentsByMethodRes.data || [];
 
-  // Statistiche uscite
   const outingsTotal = outings.length;
   const outingsClosed = outings.filter((o) => o.status === 'chiusa').length;
   const outingsCancelled = outings.filter((o) => o.status === 'annullata').length;
   const outingsDraft = outings.filter((o) => o.status === 'bozza').length;
 
-  // Per disciplina
   const byDiscipline: Record<string, number> = {};
   outings.forEach((o) => {
+    if (o.status !== 'chiusa') return;
     const d = o.discipline || 'altro';
     byDiscipline[d] = (byDiscipline[d] || 0) + 1;
   });
 
-  // Per barca
   const byBoat: Record<string, { name: string; count: number }> = {};
   outings.forEach((o) => {
-    if (!o.boat_id) return;
+    if (o.status !== 'chiusa' || !o.boat_id) return;
     const boatRel = o.boats as { name: string } | { name: string }[] | null;
     const name = Array.isArray(boatRel) ? boatRel[0]?.name : boatRel?.name;
     if (!byBoat[o.boat_id]) byBoat[o.boat_id] = { name: name || '?', count: 0 };
     byBoat[o.boat_id].count += 1;
   });
 
-  // Cash flow
-  const incomeReceived = movements
-    .filter((m) => Number(m.amount) > 0 && m.paid)
-    .reduce((sum, m) => sum + Number(m.amount), 0);
-  const outstanding = movements
-    .filter((m) => Number(m.amount) < 0 && !m.paid)
-    .reduce((sum, m) => sum + (-Number(m.amount)), 0);
-
-  // Per metodo pagamento
-  const byMethod: Record<string, number> = {};
-  payments.forEach((p) => {
-    const m = p.payment_method || 'altro';
-    byMethod[m] = (byMethod[m] || 0) + Number(p.amount);
+  // Conta lift consumati e partecipazioni
+  let totalLiftsConsumed = 0;
+  movements.forEach((m) => {
+    if (Number(m.lift_delta) === -1) totalLiftsConsumed++;
   });
+
+  // Partecipanti totali in tutte le uscite chiuse del periodo
+  const closedIds = outings.filter((o) => o.status === 'chiusa').map((o) => o.id);
+  let totalParticipants = 0;
+  if (closedIds.length > 0) {
+    const { count } = await supabase
+      .from('outing_participants')
+      .select('*', { count: 'exact', head: true })
+      .in('outing_id', closedIds);
+    totalParticipants = count || 0;
+  }
 
   return NextResponse.json({
     type: 'season',
@@ -126,12 +114,9 @@ async function reportSeason(supabase: SB, from: string, to: string) {
       by_discipline: byDiscipline,
       by_boat: Object.values(byBoat).sort((a, b) => b.count - a.count),
     },
-    cashflow: {
-      income_received: incomeReceived,
-      outstanding,
-      by_payment_method: byMethod,
-    },
     members_active: membersRes.count || 0,
+    total_participants: totalParticipants,
+    total_lifts_consumed: totalLiftsConsumed,
   });
 }
 
@@ -146,13 +131,13 @@ async function reportMember(supabase: SB, memberId: string, from: string, to: st
       .eq('member_id', memberId)
       .gte('outings.outing_date', from).lte('outings.outing_date', to),
     supabase.from('movements')
-      .select('*')
+      .select('movement_date, movement_type, description, lift_delta, lift_discipline')
       .eq('member_id', memberId)
       .eq('is_reversed', false)
       .gte('movement_date', from).lte('movement_date', to + 'T23:59:59')
       .order('movement_date', { ascending: true }),
     supabase.from('packages')
-      .select('*')
+      .select('service_name_snapshot, lifts_total, lifts_used, is_subscription, valid_from, valid_until, created_at, discipline')
       .eq('member_id', memberId)
       .gte('created_at', from).lte('created_at', to + 'T23:59:59'),
     supabase.from('member_active_subscriptions')
@@ -165,15 +150,7 @@ async function reportMember(supabase: SB, memberId: string, from: string, to: st
   }
 
   const movements = movementsRes.data || [];
-  const totalPaid = movements
-    .filter((m) => Number(m.amount) > 0 && m.paid)
-    .reduce((sum, m) => sum + Number(m.amount), 0);
-  const totalDue = movements
-    .filter((m) => Number(m.amount) < 0 && !m.paid)
-    .reduce((sum, m) => sum + (-Number(m.amount)), 0);
-  const liftConsumed = movements
-    .filter((m) => Number(m.lift_delta) === -1)
-    .length;
+  const liftConsumed = movements.filter((m) => Number(m.lift_delta) === -1).length;
 
   return NextResponse.json({
     type: 'member',
@@ -184,8 +161,6 @@ async function reportMember(supabase: SB, memberId: string, from: string, to: st
     packages: packagesRes.data || [],
     active_subscriptions: subsRes.data || [],
     summary: {
-      total_paid: totalPaid,
-      total_outstanding: totalDue,
       lifts_consumed: liftConsumed,
       participations_count: (participationsRes.data || []).length,
     },
@@ -218,7 +193,6 @@ async function reportBoat(supabase: SB, boatId: string, from: string, to: string
     (sum, o) => sum + (o.outing_participants?.length || 0), 0
   );
 
-  // Calcolo ore
   let totalMinutes = 0;
   outings.forEach((o) => {
     if (o.status !== 'chiusa') return;
@@ -227,20 +201,6 @@ async function reportBoat(supabase: SB, boatId: string, from: string, to: string
     const [rh, rm] = o.return_time.split(':').map(Number);
     totalMinutes += (rh * 60 + rm) - (dh * 60 + dm);
   });
-
-  // Movimenti per uscite di questa barca
-  const outingIds = outings.map((o) => o.id);
-  let revenue = 0;
-  if (outingIds.length > 0) {
-    const { data: movs } = await supabase
-      .from('movements')
-      .select('amount')
-      .in('outing_id', outingIds)
-      .eq('is_reversed', false)
-      .eq('paid', true)
-      .gt('amount', 0);
-    revenue = (movs || []).reduce((sum, m) => sum + Number(m.amount), 0);
-  }
 
   return NextResponse.json({
     type: 'boat',
@@ -253,7 +213,6 @@ async function reportBoat(supabase: SB, boatId: string, from: string, to: string
       cancelled,
       total_participants: totalParticipants,
       total_hours: Math.round(totalMinutes / 60 * 10) / 10,
-      revenue_generated: revenue,
     },
   });
 }
@@ -283,7 +242,6 @@ async function reportInstructor(supabase: SB, instructorId: string, from: string
 
   const assignments = assignmentsRes.data || [];
 
-  // Estrai uscite dalle assegnazioni
   type OutingFromAssignment = {
     id: string; outing_date: string; status: string; discipline: string | null;
     departure_time: string | null; return_time: string | null;

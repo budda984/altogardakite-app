@@ -143,7 +143,7 @@ export default async function MembersListPage({
 
       {members && members.length > 0 && (
         <div className="rounded-lg border border-border bg-bg-surface overflow-hidden">
-          <div className="hidden lg:grid grid-cols-[60px_2fr_2fr_1fr_180px_60px] gap-4 px-5 py-3 border-b border-border text-xs uppercase tracking-wider text-text-dim font-medium">
+          <div className="hidden md:grid grid-cols-[60px_2fr_2fr_70px_180px_30px] gap-3 px-4 py-2.5 border-b border-border text-[10px] uppercase tracking-wider text-text-dim font-medium">
             <div>N°</div>
             <div>Nome</div>
             <div>Contatti</div>
@@ -163,67 +163,122 @@ export default async function MembersListPage({
                 <Link
                   key={m.id}
                   href={`/soci/${m.id}`}
-                  className="block lg:grid lg:grid-cols-[60px_2fr_2fr_1fr_180px_60px] gap-4 px-5 py-4 hover:bg-bg-elevated transition-colors"
+                  className="block hover:bg-bg-elevated transition-colors"
                 >
-                  <div className="text-xs text-text-dim font-mono mb-1 lg:mb-0">
-                    #{m.membership_number}
-                  </div>
-                  <div>
-                    <div className="font-medium flex items-center gap-1.5 flex-wrap">
-                      <span>{m.first_name} {m.last_name}</span>
-                      {m.member_type === 'sostenitore' && <Heart className="h-3 w-3 text-text-dim" />}
-                      {m.member_type === 'con_lift' && <Wind className="h-3 w-3 text-accent" />}
+                  {/* Vista DESKTOP: tabella compatta */}
+                  <div className="hidden md:grid md:grid-cols-[60px_2fr_2fr_70px_180px_30px] gap-3 px-4 py-2.5 items-center text-sm">
+                    <div className="text-xs text-text-dim font-mono">
+                      #{m.membership_number}
                     </div>
-                    <div className="text-xs text-text-muted lg:hidden mt-0.5">
-                      {m.email}
+                    <div className="min-w-0">
+                      <div className="font-medium flex items-center gap-1.5 truncate">
+                        <span className="truncate">{m.first_name} {m.last_name}</span>
+                        {m.member_type === 'sostenitore' && <Heart className="h-3 w-3 text-text-dim shrink-0" />}
+                        {m.member_type === 'con_lift' && <Wind className="h-3 w-3 text-accent shrink-0" />}
+                      </div>
+                    </div>
+                    <div className="text-xs text-text-muted min-w-0">
+                      <div className="truncate">{m.email}</div>
+                      <div className="text-[10px] truncate">{m.phone}</div>
+                    </div>
+                    <div className="text-xs">
+                      {calcAge(m.birth_date)}
+                      {m.is_minor && <span className="ml-0.5 text-[10px] text-warning">(min)</span>}
+                    </div>
+                    <div className="flex flex-wrap gap-1 items-start">
+                      {!m.active && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-text-dim/10 text-text-dim">
+                          Non attivo
+                        </span>
+                      )}
+                      {membershipExpired && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 inline-flex items-center gap-0.5" title="Tessera scaduta">
+                          <CalendarClock className="h-2.5 w-2.5" /> tessera
+                        </span>
+                      )}
+                      {membershipExpiring && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 inline-flex items-center gap-0.5" title="Tessera in scadenza">
+                          <CalendarClock className="h-2.5 w-2.5" /> tessera
+                        </span>
+                      )}
+                      {certExpired && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 inline-flex items-center gap-0.5" title="Certificato scaduto">
+                          <HeartPulse className="h-2.5 w-2.5" /> cert.
+                        </span>
+                      )}
+                      {certExpiring && !certExpired && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 inline-flex items-center gap-0.5" title="Certificato in scadenza">
+                          <HeartPulse className="h-2.5 w-2.5" /> cert.
+                        </span>
+                      )}
+                      {certMissing && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 inline-flex items-center gap-0.5" title="Certificato medico mancante">
+                          <AlertTriangle className="h-2.5 w-2.5" /> cert.
+                        </span>
+                      )}
+                      {m.active && !membershipExpired && !membershipExpiring && !certExpired && !certExpiring && !certMissing && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 inline-flex items-center gap-0.5">
+                          <CheckCircle2 className="h-2.5 w-2.5" /> OK
+                        </span>
+                      )}
+                    </div>
+                    <ChevronRight className="h-3.5 w-3.5 text-text-dim" />
+                  </div>
+
+                  {/* Vista MOBILE: card */}
+                  <div className="md:hidden p-3">
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[10px] text-text-dim font-mono mb-0.5">
+                          #{m.membership_number}
+                        </div>
+                        <div className="font-medium flex items-center gap-1.5">
+                          <span>{m.first_name} {m.last_name}</span>
+                          {m.member_type === 'sostenitore' && <Heart className="h-3 w-3 text-text-dim" />}
+                          {m.member_type === 'con_lift' && <Wind className="h-3 w-3 text-accent" />}
+                          {m.is_minor && <span className="text-[10px] text-warning">(min)</span>}
+                        </div>
+                        <div className="text-[11px] text-text-muted mt-0.5 truncate">
+                          {m.email}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-1 mt-1.5">
+                      {!m.active && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-text-dim/10 text-text-dim">Non attivo</span>
+                      )}
+                      {membershipExpired && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 inline-flex items-center gap-0.5">
+                          <CalendarClock className="h-2.5 w-2.5" /> tessera
+                        </span>
+                      )}
+                      {membershipExpiring && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 inline-flex items-center gap-0.5">
+                          <CalendarClock className="h-2.5 w-2.5" /> tessera
+                        </span>
+                      )}
+                      {certExpired && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 inline-flex items-center gap-0.5">
+                          <HeartPulse className="h-2.5 w-2.5" /> cert.
+                        </span>
+                      )}
+                      {certExpiring && !certExpired && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 inline-flex items-center gap-0.5">
+                          <HeartPulse className="h-2.5 w-2.5" /> cert.
+                        </span>
+                      )}
+                      {certMissing && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 inline-flex items-center gap-0.5">
+                          <AlertTriangle className="h-2.5 w-2.5" /> cert.
+                        </span>
+                      )}
+                      {m.active && !membershipExpired && !membershipExpiring && !certExpired && !certExpiring && !certMissing && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 inline-flex items-center gap-0.5">
+                          <CheckCircle2 className="h-2.5 w-2.5" /> OK
+                        </span>
+                      )}
                     </div>
                   </div>
-                  <div className="hidden lg:block text-sm text-text-muted">
-                    <div className="truncate">{m.email}</div>
-                    <div className="text-xs">{m.phone}</div>
-                  </div>
-                  <div className="text-sm hidden lg:block">
-                    {calcAge(m.birth_date)} anni
-                    {m.is_minor && <span className="ml-1 text-xs text-warning">(min)</span>}
-                  </div>
-                  <div className="flex flex-wrap gap-1 items-start mt-1.5 lg:mt-0">
-                    {!m.active && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-text-dim/10 text-text-dim">
-                        Non attivo
-                      </span>
-                    )}
-                    {membershipExpired && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 inline-flex items-center gap-0.5" title="Tessera scaduta">
-                        <CalendarClock className="h-2.5 w-2.5" /> tessera
-                      </span>
-                    )}
-                    {membershipExpiring && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 inline-flex items-center gap-0.5" title="Tessera in scadenza">
-                        <CalendarClock className="h-2.5 w-2.5" /> tessera
-                      </span>
-                    )}
-                    {certExpired && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 inline-flex items-center gap-0.5" title="Certificato scaduto">
-                        <HeartPulse className="h-2.5 w-2.5" /> cert.
-                      </span>
-                    )}
-                    {certExpiring && !certExpired && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 inline-flex items-center gap-0.5" title="Certificato in scadenza">
-                        <HeartPulse className="h-2.5 w-2.5" /> cert.
-                      </span>
-                    )}
-                    {certMissing && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 inline-flex items-center gap-0.5" title="Certificato medico mancante">
-                        <AlertTriangle className="h-2.5 w-2.5" /> cert.
-                      </span>
-                    )}
-                    {m.active && !membershipExpired && !membershipExpiring && !certExpired && !certExpiring && !certMissing && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 inline-flex items-center gap-0.5">
-                        <CheckCircle2 className="h-2.5 w-2.5" /> OK
-                      </span>
-                    )}
-                  </div>
-                  <ChevronRight className="hidden lg:block h-4 w-4 text-text-dim self-center" />
                 </Link>
               );
             })}

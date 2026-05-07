@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ChevronLeft, ChevronRight, Plus, Loader2, Anchor, Users, Wind,
   Trash2, Settings, CalendarDays, Sparkles, Lock, Unlock, CheckCircle2, AlertCircle,
-  Pencil, XCircle, FileText,
+  Pencil, XCircle,
 } from 'lucide-react';
 import type {
   Boat, Instructor, Member, Service, SessionTemplate,
@@ -220,13 +220,6 @@ export default function PlanningView({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Link
-            href="/report"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs bg-bg-elevated text-text-muted hover:text-text"
-          >
-            <FileText className="h-3.5 w-3.5" />
-            Report
-          </Link>
           <Link
             href="/planning/template"
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs bg-bg-elevated text-text-muted hover:text-text"
