@@ -204,7 +204,7 @@ export type SettleDebtsFormData = z.infer<typeof settleDebtsSchema>;
 // WALLET: consumo lift manuale (collegato a uscita)
 // ============================================================================
 export const consumeLiftSchema = z.object({
-  discipline: z.enum(['kite', 'wingfoil', 'sit_kite', 'wingfoil_adattato', 'altro']),
+  discipline: z.enum(['kite', 'wingfoil', 'sit_kite', 'wingfoil_adattato', 'corso', 'altro']),
   package_id: z.string().uuid().nullable().optional(),
   outing_id: z.string().uuid().nullable().optional(),
   notes: z.string().optional().or(z.literal('')),
@@ -216,7 +216,7 @@ export type ConsumeLiftFormData = z.infer<typeof consumeLiftSchema>;
 // ============================================================================
 export const sessionTemplateSchema = z.object({
   name: z.string().min(1, 'Nome obbligatorio').max(100),
-  discipline: z.enum(['kite', 'wingfoil', 'sit_kite', 'wingfoil_adattato', 'altro']),
+  discipline: z.enum(['kite', 'wingfoil', 'sit_kite', 'wingfoil_adattato', 'corso', 'altro']),
   wind_session: z.enum(['peler', 'ora', 'ora_serale']).nullable().optional(),
   default_departure_time: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/, 'Formato HH:MM'),
   default_return_time: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/, 'Formato HH:MM'),
@@ -236,7 +236,7 @@ export const planningOutingSchema = z.object({
   boat_id: z.string().uuid('Imbarcazione obbligatoria'),
   departure_time: z.string().optional().or(z.literal('')),
   return_time: z.string().optional().or(z.literal('')),
-  discipline: z.enum(['kite', 'wingfoil', 'sit_kite', 'wingfoil_adattato', 'altro']).optional(),
+  discipline: z.enum(['kite', 'wingfoil', 'sit_kite', 'wingfoil_adattato', 'corso', 'altro']).optional(),
   wind_session: z.enum(['peler', 'ora', 'ora_serale']).nullable().optional(),
   weather_notes: z.string().optional().or(z.literal('')),
   notes: z.string().optional().or(z.literal('')),

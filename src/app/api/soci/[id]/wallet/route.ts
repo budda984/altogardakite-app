@@ -9,27 +9,29 @@ export async function GET(
     const { id: memberId } = await params;
     const supabase = await createClient();
 
-    const [walletRes, balancesRes, packagesRes, movementsRes, subsRes, debtsRes] = await Promise.all([
-      supabase.from('member_wallets').select('*').eq('member_id', memberId).single(),
+    const [balancesRes, packagesRes, movementsRes, subsRes] = await Promise.all([
       supabase.from('member_lift_balances').select('*').eq('member_id', memberId),
       supabase.from('packages').select('*').eq('member_id', memberId).order('created_at', { ascending: false }),
-      supabase.from('movements').select('*')
+      supabase.from('movements').select('id, movement_date, movement_type, description, lift_delta, lift_discipline')
         .eq('member_id', memberId)
         .eq('is_reversed', false)
-        .order('movement_date', { ascending: false }).limit(100),
+        .order('movement_date', { ascending: false }).limit(20),
       supabase.from('member_active_subscriptions').select('*').eq('member_id', memberId),
-      supabase.from('member_open_debts').select('*')
-        .eq('member_id', memberId)
-        .order('movement_date', { ascending: true }),
     ]);
 
+    // Filtra pacchetti attivi (non esauriti, escluse subscriptions)
+    const activePackages = (packagesRes.data || [])
+      .filter((p) => !p.is_subscription && !p.is_exhausted)
+      .map((p) => ({
+        ...p,
+        lifts_remaining: p.lifts_total - p.lifts_used,
+      }));
+
     return NextResponse.json({
-      wallet: walletRes.data,
       lift_balances: balancesRes.data || [],
-      packages: packagesRes.data || [],
-      movements: movementsRes.data || [],
+      active_packages: activePackages,
+      recent_movements: movementsRes.data || [],
       active_subscriptions: subsRes.data || [],
-      open_debts: debtsRes.data || [],
     });
   } catch (e) {
     return NextResponse.json(

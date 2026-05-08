@@ -13,10 +13,9 @@ import { DateInput } from '@/components/ui/DateInput';
 import { Button } from '@/components/ui/Button';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Card } from '@/components/ui/Card';
-import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { isMinor } from '@/lib/utils';
-import { MEMBER_TYPE_LABELS, MEMBER_TYPE_PRICES, type MemberType, PAYMENT_METHOD_LABELS, type PaymentMethod } from '@/lib/types';
+import { MEMBER_TYPE_LABELS, type MemberType } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
 const MEMBER_TYPE_DESCRIPTIONS: Record<MemberType, string> = {
@@ -55,7 +54,6 @@ export default function NuovoSocioPage() {
   const isForeign = watch('is_foreign');
   const isMinorWatch = watch('is_minor');
   const certReceived = watch('medical_cert_received');
-  const paidNow = watch('membership_paid_now');
 
   // Auto-detect minore dalla data di nascita
   const autoMinor = birthDate ? isMinor(birthDate) : false;
@@ -118,7 +116,6 @@ export default function NuovoSocioPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {(Object.keys(MEMBER_TYPE_LABELS) as MemberType[]).map((t) => {
               const isSelected = memberType === t;
-              const price = MEMBER_TYPE_PRICES[t];
               return (
                 <button
                   key={t}
@@ -131,7 +128,7 @@ export default function NuovoSocioPage() {
                       : 'bg-bg-surface border-border hover:border-text-muted'
                   )}
                 >
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex items-center gap-2 mb-2">
                     {t === 'sostenitore' && <Heart className={cn('h-4 w-4', isSelected ? 'text-accent' : 'text-text-muted')} />}
                     {t === 'normale' && <User className={cn('h-4 w-4', isSelected ? 'text-accent' : 'text-text-muted')} />}
                     {t === 'con_lift' && <Wind className={cn('h-4 w-4', isSelected ? 'text-accent' : 'text-text-muted')} />}
@@ -139,22 +136,10 @@ export default function NuovoSocioPage() {
                       {MEMBER_TYPE_LABELS[t]}
                     </span>
                   </div>
-                  <div className="text-2xl font-display font-bold mb-2">€ {price}</div>
                   <div className="text-xs text-text-muted">{MEMBER_TYPE_DESCRIPTIONS[t]}</div>
                 </button>
               );
             })}
-          </div>
-
-          <div className="mt-4 grid grid-cols-2 gap-4">
-            <Checkbox label="Quota pagata subito" {...register('membership_paid_now')} />
-            {paidNow && (
-              <Select label="Metodo pagamento" {...register('membership_payment_method')}>
-                {(Object.keys(PAYMENT_METHOD_LABELS) as PaymentMethod[]).map((m) => (
-                  <option key={m} value={m}>{PAYMENT_METHOD_LABELS[m]}</option>
-                ))}
-              </Select>
-            )}
           </div>
         </Card>
 
@@ -267,7 +252,7 @@ export default function NuovoSocioPage() {
           <Button type="submit" disabled={submitting} size="lg">
             {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             <FileText className="h-4 w-4 mr-2" />
-            Crea socio (€ {MEMBER_TYPE_PRICES[memberType]})
+            Crea socio
           </Button>
         </div>
       </form>

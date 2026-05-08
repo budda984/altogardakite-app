@@ -20,8 +20,7 @@ import {
   adjustCreditsSchema, type AdjustCreditsFormData,
 } from '@/lib/validation/admin-schemas';
 import {
-  type MemberType, MEMBER_TYPE_LABELS, MEMBER_TYPE_PRICES,
-  type PaymentMethod, PAYMENT_METHOD_LABELS,
+  type MemberType, MEMBER_TYPE_LABELS,
   DISCIPLINE_LABELS,
 } from '@/lib/types';
 import { cn, formatDate } from '@/lib/utils';
@@ -192,7 +191,6 @@ function RenewModal({ member, onClose }: { member: MemberData; onClose: () => vo
   });
 
   const memberType = watch('member_type');
-  const paidNow = watch('paid_now');
 
   const onSubmit = async (data: RenewMembershipFormData) => {
     setSubmitting(true);
@@ -261,7 +259,11 @@ function RenewModal({ member, onClose }: { member: MemberData; onClose: () => vo
                       {MEMBER_TYPE_LABELS[t]}
                     </span>
                   </div>
-                  <div className="text-lg font-display font-bold mt-1">€ {MEMBER_TYPE_PRICES[t]}</div>
+                  <div className="text-[10px] text-text-muted mt-1">
+                    {t === 'sostenitore' && 'Solo socio, no uscite'}
+                    {t === 'normale' && 'Tessera con uscite a consumo'}
+                    {t === 'con_lift' && '1 lift kite incluso'}
+                  </div>
                 </button>
               );
             })}
@@ -271,17 +273,6 @@ function RenewModal({ member, onClose }: { member: MemberData; onClose: () => vo
         <div className="p-3 rounded bg-emerald-500/5 border border-emerald-500/30 text-xs text-emerald-400">
           La nuova scadenza sara fissata al <strong>30 ottobre dell&apos;anno prossimo</strong>.
           {memberType === 'con_lift' && ' Verra anche aggiunto 1 lift kite al wallet.'}
-        </div>
-
-        <div className="space-y-3">
-          <Checkbox label="Quota pagata subito" {...register('paid_now')} />
-          {paidNow && (
-            <Select label="Metodo pagamento" {...register('payment_method')}>
-              {(Object.keys(PAYMENT_METHOD_LABELS) as PaymentMethod[]).map((m) => (
-                <option key={m} value={m}>{PAYMENT_METHOD_LABELS[m]}</option>
-              ))}
-            </Select>
-          )}
         </div>
 
         {error && (
@@ -294,7 +285,7 @@ function RenewModal({ member, onClose }: { member: MemberData; onClose: () => vo
           <Button type="button" variant="ghost" onClick={onClose}>Annulla</Button>
           <Button type="submit" disabled={submitting}>
             {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            Rinnova (€ {MEMBER_TYPE_PRICES[memberType]})
+            Rinnova tessera
           </Button>
         </div>
       </form>

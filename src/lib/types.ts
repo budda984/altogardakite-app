@@ -362,7 +362,7 @@ export const USER_ROLE_LABELS: Record<UserRole, string> = {
 // ============================================================================
 // WALLET / PACKAGES / MOVEMENTS
 // ============================================================================
-export type LiftDiscipline = 'kite' | 'wingfoil' | 'sit_kite' | 'wingfoil_adattato' | 'altro';
+export type LiftDiscipline = 'kite' | 'wingfoil' | 'sit_kite' | 'wingfoil_adattato' | 'corso' | 'altro';
 
 export type MovementType =
   | 'acquisto_pacchetto'
@@ -459,6 +459,7 @@ export const DISCIPLINE_LABELS: Record<LiftDiscipline, string> = {
   wingfoil: 'Wingfoil',
   sit_kite: 'Sit\'n\'kite',
   wingfoil_adattato: 'Wingfoil adattato',
+  corso: 'Corso',
   altro: 'Altro',
 };
 

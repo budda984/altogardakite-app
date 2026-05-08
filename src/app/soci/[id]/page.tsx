@@ -31,7 +31,7 @@ export default async function MemberDetailPage({
   const auth = await getAuth();
 
   // Corsi e uscite del socio
-  const [{ data: courses }, { data: outings }, { data: services }] = await Promise.all([
+  const [{ data: courses }, { data: outings }] = await Promise.all([
     supabase
       .from('courses')
       .select('*')
@@ -43,12 +43,6 @@ export default async function MemberDetailPage({
       .eq('member_id', id)
       .order('outings(outing_date)', { ascending: false })
       .limit(10),
-    supabase
-      .from('services')
-      .select('*')
-      .eq('is_active', true)
-      .order('sort_order')
-      .order('name'),
   ]);
 
   return (
@@ -165,7 +159,7 @@ export default async function MemberDetailPage({
 
       {/* Servizi e pagamenti */}
       <div className="mb-6">
-        <MemberWalletPanel memberId={id} services={services || []} />
+        <MemberWalletPanel memberId={id} />
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
