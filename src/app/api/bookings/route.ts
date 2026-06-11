@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
       .from('bookings_with_member')
       .select('*')
       .eq('booking_date', date)
-      .order('last_name', { ascending: true });
+      .order('first_name', { ascending: true });
 
     if (!includeAll) {
       query = query.eq('status', 'pending');

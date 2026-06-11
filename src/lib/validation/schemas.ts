@@ -7,10 +7,10 @@ import { z } from 'zod';
 // ============================================================================
 
 export const memberSchema = z.object({
-  // Anagrafica essenziale
+  // SOLO nome e cognome obbligatori - tutto il resto opzionale
   first_name: z.string().min(1, 'Nome obbligatorio').max(100),
   last_name: z.string().min(1, 'Cognome obbligatorio').max(100),
-  birth_date: z.string().min(1, 'Data nascita obbligatoria'),
+  birth_date: z.string().optional().or(z.literal('')),
   birth_place: z.string().optional().or(z.literal('')),
   birth_province: z.string().max(2).optional().or(z.literal('')),
 
@@ -19,12 +19,12 @@ export const memberSchema = z.object({
   fiscal_code: z.string().optional().or(z.literal('')),
   foreign_id_doc: z.string().optional().or(z.literal('')),
 
-  // Contatti
-  phone: z.string().min(1, 'Telefono obbligatorio'),
-  email: z.string().email('Email non valida'),
+  // Contatti (opzionali; se presenti devono essere validi)
+  phone: z.string().optional().or(z.literal('')),
+  email: z.string().email('Email non valida').optional().or(z.literal('')),
 
-  // Indirizzo (campo libero singolo, semplificato)
-  address: z.string().min(1, 'Indirizzo obbligatorio'),
+  // Indirizzo (campo libero singolo, opzionale)
+  address: z.string().optional().or(z.literal('')),
 
   // Minore
   is_minor: z.boolean().default(false),
@@ -45,36 +45,17 @@ export const memberSchema = z.object({
   // Note
   notes: z.string().optional().or(z.literal('')),
 }).superRefine((data, ctx) => {
-  // CF obbligatorio per italiani
-  if (!data.is_foreign) {
-    if (!data.fiscal_code || data.fiscal_code.trim() === '') {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Codice fiscale obbligatorio',
-        path: ['fiscal_code'],
-      });
-    } else if (!/^[A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z]$/i.test(data.fiscal_code.trim())) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Codice fiscale non valido',
-        path: ['fiscal_code'],
-      });
-    }
+  // CF: se presente, deve avere formato valido (non piu obbligatorio)
+  if (data.fiscal_code && data.fiscal_code.trim() !== ''
+      && !/^[A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z]$/i.test(data.fiscal_code.trim())) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Codice fiscale non valido',
+      path: ['fiscal_code'],
+    });
   }
 
-  // Minore: dati genitore essenziali
-  if (data.is_minor) {
-    if (!data.parent_first_name || !data.parent_last_name || !data.parent_phone) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Per i minori sono obbligatori nome, cognome e telefono del genitore',
-        path: ['parent_first_name'],
-      });
-    }
-  }
-
-  // Sostenitori: niente certificato medico richiesto
-  // Per gli altri, se hanno marcato "ricevuto", la data scadenza e' obbligatoria
+  // Certificato: se marcato "ricevuto", la data scadenza e' obbligatoria
   if (data.medical_cert_received && !data.medical_cert_expires_at) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,

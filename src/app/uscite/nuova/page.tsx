@@ -40,7 +40,7 @@ export default function NewOutingPage() {
     Promise.all([
       sb.from('boats').select('*').eq('active', true).order('name'),
       sb.from('instructors').select('*').eq('active', true).order('last_name'),
-      sb.from('members').select('id, first_name, last_name, membership_number').eq('active', true).order('last_name'),
+      sb.from('members').select('id, first_name, last_name, membership_number').eq('active', true).order('first_name'),
       sb.from('equipment').select('*').neq('status', 'dismesso').order('code'),
     ]).then(([b, i, m, e]) => {
       setBoats((b.data as Boat[]) || []);

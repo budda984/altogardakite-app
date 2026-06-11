@@ -263,7 +263,7 @@ function BookingCard({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5 flex-wrap">
           <Link href={`/soci/${booking.member_id}`} className="text-sm font-medium text-text hover:text-accent truncate">
-            {booking.last_name} {booking.first_name}
+            {booking.first_name} {booking.last_name}
           </Link>
           <span className="text-[10px] text-text-dim">#{booking.membership_number}</span>
           {booking.member_type === 'con_lift' && (

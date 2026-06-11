@@ -231,7 +231,7 @@ export default function CreateOutingFromBookingsModal({
                     className="rounded"
                   />
                   <span className="text-sm flex-1">
-                    {b.last_name} {b.first_name}
+                    {b.first_name} {b.last_name}
                     <span className="text-xs text-text-dim ml-1.5">#{b.membership_number}</span>
                     {b.preferred_discipline && (
                       <span className="text-[10px] text-text-muted ml-1.5">

@@ -282,7 +282,7 @@ export default function OutingDetailView({
                   setEditingParticipantId(null);
                   router.refresh();
                 }}
-                onDelete={() => removeParticipant(p.id, `${p.member?.last_name} ${p.member?.first_name}`)}
+                onDelete={() => removeParticipant(p.id, `${p.member?.first_name} ${p.member?.last_name}`)}
                 disabled={busy}
               />
             ))}
@@ -395,7 +395,7 @@ function ParticipantRow({
       <div className="p-4 border-b border-border last:border-b-0 bg-bg-elevated/30 space-y-3">
         <div className="flex items-center justify-between gap-2">
           <div className="font-medium text-sm">
-            {p.member?.last_name} {p.member?.first_name}
+            {p.member?.first_name} {p.member?.last_name}
             <span className="text-text-dim text-xs ml-1.5">#{p.member?.membership_number}</span>
           </div>
           <button
@@ -452,7 +452,7 @@ function ParticipantRow({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5 flex-wrap">
           <Link href={`/soci/${p.member?.id}`} className="font-medium text-sm hover:text-accent">
-            {p.member?.last_name} {p.member?.first_name}
+            {p.member?.first_name} {p.member?.last_name}
           </Link>
           <span className="text-[10px] text-text-dim">#{p.member?.membership_number}</span>
           <span className={cn(
@@ -731,7 +731,7 @@ function AddParticipantModal({
                   onClick={() => add(m.id)}
                   className="w-full p-2.5 text-left hover:bg-bg-surface text-sm flex items-center justify-between"
                 >
-                  <span>{m.last_name} {m.first_name}</span>
+                  <span>{m.first_name} {m.last_name}</span>
                   <span className="text-xs text-text-dim">#{m.membership_number}</span>
                 </button>
               ))
@@ -752,7 +752,7 @@ function AddParticipantModal({
                   <div key={s.member_id} className="p-3 rounded border border-border bg-bg-elevated/50">
                     <div className="flex items-start justify-between gap-3 mb-2">
                       <div className="font-medium text-sm">
-                        {m.last_name} {m.first_name}
+                        {m.first_name} {m.last_name}
                         <span className="text-xs text-text-dim ml-1.5">#{m.membership_number}</span>
                       </div>
                       <button onClick={() => remove(s.member_id)} className="p-1 rounded hover:bg-red-500/10 text-text-dim hover:text-red-400">

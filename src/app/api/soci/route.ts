@@ -26,14 +26,14 @@ export async function POST(request: Request) {
     const memberInsert = {
       first_name: data.first_name.trim(),
       last_name: data.last_name.trim(),
-      birth_date: data.birth_date,
+      birth_date: data.birth_date || null,
       birth_place: data.birth_place || null,
       birth_province: data.birth_province?.toUpperCase() || null,
       fiscal_code: data.fiscal_code ? data.fiscal_code.toUpperCase().trim() : null,
       is_foreign: data.is_foreign,
       foreign_id_doc: data.foreign_id_doc?.trim() || null,
-      phone: data.phone,
-      email: data.email.toLowerCase(),
+      phone: data.phone || null,
+      email: data.email ? data.email.toLowerCase() : null,
       // Indirizzo: usiamo il campo libero address come address_street per compatibilita'
       address_street: data.address || null,
       address_number: null,

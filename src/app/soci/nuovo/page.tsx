@@ -154,7 +154,7 @@ export default function NuovoSocioPage() {
               render={({ field }) => (
                 <DateInput
                   label="Data di nascita"
-                  required
+
                   value={field.value || ''}
                   onChange={field.onChange}
                   onBlur={field.onBlur}
@@ -165,9 +165,9 @@ export default function NuovoSocioPage() {
             />
             <Input label="Luogo di nascita" {...register('birth_place')} />
             <Input label="Provincia" maxLength={2} {...register('birth_province')} className="uppercase" />
-            <Input label="Telefono" type="tel" required {...register('phone')} error={errors.phone?.message} />
-            <Input label="Email" type="email" required {...register('email')} error={errors.email?.message} className="md:col-span-2" />
-            <Input label="Indirizzo" required {...register('address')} error={errors.address?.message} placeholder="Via, civico, citta'" className="md:col-span-2" />
+            <Input label="Telefono" type="tel" {...register('phone')} error={errors.phone?.message} />
+            <Input label="Email" type="email" {...register('email')} error={errors.email?.message} className="md:col-span-2" />
+            <Input label="Indirizzo" {...register('address')} error={errors.address?.message} placeholder="Via, civico, citta'" className="md:col-span-2" />
           </div>
 
           {/* Stranieri */}
@@ -183,7 +183,7 @@ export default function NuovoSocioPage() {
             ) : (
               <Input
                 label="Codice fiscale"
-                required
+
                 {...register('fiscal_code')}
                 error={errors.fiscal_code?.message}
                 className="uppercase font-mono"
@@ -200,9 +200,9 @@ export default function NuovoSocioPage() {
             description="Obbligatorio per minori. Le firme cartacee dovranno essere apposte dal genitore."
           >
             <div className="grid md:grid-cols-2 gap-4">
-              <Input label="Nome genitore" required {...register('parent_first_name')} error={errors.parent_first_name?.message} />
-              <Input label="Cognome genitore" required {...register('parent_last_name')} error={errors.parent_last_name?.message} />
-              <Input label="Telefono genitore" type="tel" required {...register('parent_phone')} />
+              <Input label="Nome genitore" {...register('parent_first_name')} error={errors.parent_first_name?.message} />
+              <Input label="Cognome genitore" {...register('parent_last_name')} error={errors.parent_last_name?.message} />
+              <Input label="Telefono genitore" type="tel" {...register('parent_phone')} />
               <Input label="Email genitore" type="email" {...register('parent_email')} />
             </div>
           </Card>

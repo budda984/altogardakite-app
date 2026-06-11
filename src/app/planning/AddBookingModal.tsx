@@ -218,7 +218,7 @@ export default function AddBookingModal({
                     onClick={() => addMember(m.id)}
                     className="w-full p-2.5 text-left hover:bg-bg-surface text-sm flex items-center justify-between"
                   >
-                    <span className="text-text">{m.last_name} {m.first_name}</span>
+                    <span className="text-text">{m.first_name} {m.last_name}</span>
                     <span className="text-xs text-text-dim">#{m.membership_number}</span>
                   </button>
                 ))
@@ -248,7 +248,7 @@ export default function AddBookingModal({
                     <div className="flex items-start justify-between gap-3 mb-2">
                       <div className="min-w-0 flex-1">
                         <div className="font-medium text-text text-sm">
-                          {m.last_name} {m.first_name}
+                          {m.first_name} {m.last_name}
                           <span className="text-xs text-text-dim ml-1.5">#{m.membership_number}</span>
                         </div>
                       </div>

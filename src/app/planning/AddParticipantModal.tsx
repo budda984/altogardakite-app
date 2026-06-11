@@ -222,7 +222,7 @@ export default function AddParticipantModal({
                     onClick={() => addMember(m.id)}
                     className="w-full p-2.5 text-left hover:bg-bg-surface text-sm flex items-center justify-between"
                   >
-                    <span className="text-text">{m.last_name} {m.first_name}</span>
+                    <span className="text-text">{m.first_name} {m.last_name}</span>
                     <span className="text-xs text-text-dim">#{m.membership_number}</span>
                   </button>
                 ))
@@ -382,7 +382,7 @@ function SelectionRow({
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="min-w-0 flex-1">
           <div className="font-medium text-text text-sm flex items-center gap-2 flex-wrap">
-            <span>{member.last_name} {member.first_name}</span>
+            <span>{member.first_name} {member.last_name}</span>
             <span className="text-xs text-text-dim">#{member.membership_number}</span>
             {walletData?.has_lift_subscription && (
               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded bg-accent/10 text-accent">

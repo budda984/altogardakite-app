@@ -45,7 +45,7 @@ export default async function OutingDetailPage({
       .select('id, first_name, last_name, membership_number, member_type, active')
       .eq('active', true)
       .neq('member_type', 'sostenitore')
-      .order('last_name'),
+      .order('first_name'),
   ]);
 
   return (
