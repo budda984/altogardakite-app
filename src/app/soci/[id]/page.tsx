@@ -77,11 +77,13 @@ export default async function MemberDetailPage({
           <MemberActions member={member} isAdmin={auth?.isAdmin || false} />
         </div>
         <div className="flex flex-wrap gap-4 mt-3 text-sm text-text-muted">
-          <span className="flex items-center gap-1.5">
-            <Calendar className="h-4 w-4" />
-            {calcAge(member.birth_date)} anni
-            {member.is_minor && <span className="text-warning text-xs">(minore)</span>}
-          </span>
+          {calcAge(member.birth_date) !== null && (
+            <span className="flex items-center gap-1.5">
+              <Calendar className="h-4 w-4" />
+              {calcAge(member.birth_date)} anni
+              {member.is_minor && <span className="text-warning text-xs">(minore)</span>}
+            </span>
+          )}
           {member.email && (
             <a href={`mailto:${member.email}`} className="flex items-center gap-1.5 hover:text-accent">
               <Mail className="h-4 w-4" /> {member.email}
@@ -167,7 +169,8 @@ export default async function MemberDetailPage({
         <Card title="Anagrafica">
           <dl className="space-y-3 text-sm">
             <Row label="Nato/a">
-              {formatDate(member.birth_date)} a {member.birth_place}
+              {formatDate(member.birth_date)}
+              {member.birth_place && ` a ${member.birth_place}`}
               {member.birth_province && ` (${member.birth_province})`}
             </Row>
             <Row label="Codice fiscale" mono>{member.fiscal_code}</Row>

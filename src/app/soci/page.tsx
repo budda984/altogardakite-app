@@ -182,7 +182,7 @@ export default async function MembersListPage({
                       <div className="text-[10px] truncate">{m.phone}</div>
                     </div>
                     <div className="text-xs">
-                      {calcAge(m.birth_date)}
+                      {calcAge(m.birth_date) ?? '—'}
                       {m.is_minor && <span className="ml-0.5 text-[10px] text-warning">(min)</span>}
                     </div>
                     <div className="flex flex-wrap gap-1 items-start">
