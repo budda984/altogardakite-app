@@ -558,6 +558,7 @@ export interface BookingWithMember extends Booking {
   last_name: string;
   membership_number: number;
   member_type: MemberType;
+  phone: string | null;
   expires_at: string | null;
   medical_cert_received: boolean;
   medical_cert_expires_at: string | null;

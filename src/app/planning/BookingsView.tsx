@@ -4,10 +4,14 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import {
   Plus, Loader2, Trash2, Anchor, Wind, Sparkles, AlertTriangle,
   Users, Sailboat, ChevronRight, GraduationCap, Heart,
+  MessageCircle, Send, Phone, Check, Zap, ExternalLink,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/Button';
+import { Modal } from '@/components/Modal';
+import { Textarea } from '@/components/ui/Textarea';
 import { cn } from '@/lib/utils';
+import { buildWhatsappLink, normalizePhone } from '@/lib/whatsapp';
 import type {
   Boat, Instructor, Member, SessionTemplate, BookingWithMember,
 } from '@/lib/types';
@@ -36,6 +40,12 @@ export default function BookingsView({
 
   // Modal: crea uscita da gruppo prenotazioni
   const [createOutingFor, setCreateOutingFor] = useState<{
+    template: SessionTemplate;
+    bookings: BookingWithMember[];
+  } | null>(null);
+
+  // Modal: avvisa via WhatsApp
+  const [notifyFor, setNotifyFor] = useState<{
     template: SessionTemplate;
     bookings: BookingWithMember[];
   } | null>(null);
@@ -127,6 +137,7 @@ export default function BookingsView({
             onAddBooking={() => setAddBookingFor(template)}
             onCreateOuting={() => setCreateOutingFor({ template, bookings: slotBookings })}
             onDeleteBooking={handleDeleteBooking}
+            onNotify={() => setNotifyFor({ template, bookings: slotBookings })}
           />
         );
       })}
@@ -158,6 +169,16 @@ export default function BookingsView({
           }}
         />
       )}
+
+      {notifyFor && (
+        <NotifyWhatsappModal
+          open={true}
+          onClose={() => setNotifyFor(null)}
+          date={date}
+          template={notifyFor.template}
+          bookings={notifyFor.bookings}
+        />
+      )}
     </div>
   );
 }
@@ -166,13 +187,14 @@ export default function BookingsView({
 // SlotBlock - una sessione (Peler / Ora / Ora late ecc.)
 // ============================================================================
 function SlotBlock({
-  template, bookings, onAddBooking, onCreateOuting, onDeleteBooking,
+  template, bookings, onAddBooking, onCreateOuting, onDeleteBooking, onNotify,
 }: {
   template: SessionTemplate;
   bookings: BookingWithMember[];
   onAddBooking: () => void;
   onCreateOuting: () => void;
   onDeleteBooking: (bookingId: string, memberName: string) => void;
+  onNotify: () => void;
 }) {
   return (
     <div className="bg-bg-surface border border-border rounded-lg overflow-hidden">
@@ -205,6 +227,12 @@ function SlotBlock({
               <Plus className="h-3.5 w-3.5 mr-1" />
               Prenota socio
             </Button>
+            {bookings.length > 0 && (
+              <Button size="sm" variant="secondary" onClick={onNotify}>
+                <MessageCircle className="h-3.5 w-3.5 mr-1" />
+                Avvisa
+              </Button>
+            )}
             {bookings.length > 0 && (
               <Button size="sm" onClick={onCreateOuting}>
                 <Sailboat className="h-3.5 w-3.5 mr-1" />
@@ -312,5 +340,207 @@ function BookingCard({
         <Trash2 className="h-3.5 w-3.5" />
       </button>
     </div>
+  );
+}
+
+// ============================================================================
+// NotifyWhatsappModal - avvisa i prenotati via WhatsApp
+// Due modalita:
+//  A) Invio automatico via OpenWA (se OPENWA_URL configurato su Vercel)
+//  B) Apri chat uno-per-uno via wa.me (sempre disponibile, fallback)
+// ============================================================================
+function NotifyWhatsappModal({
+  open, onClose, date, template, bookings,
+}: {
+  open: boolean;
+  onClose: () => void;
+  date: string;
+  template: SessionTemplate;
+  bookings: BookingWithMember[];
+}) {
+  const dateLabel = new Date(date + 'T12:00:00').toLocaleDateString('it-IT', {
+    weekday: 'long', day: 'numeric', month: 'long',
+  });
+
+  const defaultText =
+    `Ciao! Aggiornamento per la sessione ${template.name} di ${dateLabel}.\n\n` +
+    `Condizioni meteo: \n` +
+    `Ritrovo: \n\n` +
+    `A presto,\nCircolo Alto Garda Kite`;
+
+  const [text, setText] = useState(defaultText);
+  const [sentIds, setSentIds] = useState<Set<string>>(new Set());
+
+  // Stato OpenWA
+  const [openwaStatus, setOpenwaStatus] = useState<'checking' | 'available' | 'unavailable'>('checking');
+  const [sending, setSending] = useState(false);
+  const [sendResult, setSendResult] = useState<{ sent: number; failed: number; results: { name: string; ok: boolean; error?: string }[] } | null>(null);
+
+  const withPhone = bookings.filter((b) => normalizePhone(b.phone) !== null);
+  const withoutPhone = bookings.filter((b) => normalizePhone(b.phone) === null);
+
+  useEffect(() => {
+    if (!open) return;
+    setOpenwaStatus('checking');
+    fetch('/api/whatsapp/invia')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.configured && d.reachable) setOpenwaStatus('available');
+        else setOpenwaStatus('unavailable');
+      })
+      .catch(() => setOpenwaStatus('unavailable'));
+  }, [open]);
+
+  function openChat(b: BookingWithMember) {
+    const link = buildWhatsappLink(b.phone, text);
+    if (!link) return;
+    window.open(link, '_blank', 'noopener,noreferrer');
+    setSentIds((prev) => new Set(prev).add(b.id));
+  }
+
+  async function sendAll() {
+    if (!text.trim() || withPhone.length === 0) return;
+    setSending(true);
+    setSendResult(null);
+    try {
+      const res = await fetch('/api/whatsapp/invia', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text,
+          recipients: withPhone.map((b) => ({
+            name: `${b.first_name} ${b.last_name}`,
+            phone: b.phone,
+          })),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Errore invio');
+      setSendResult(data);
+    } catch (e) {
+      setSendResult({ sent: 0, failed: withPhone.length, results: [{ name: 'Errore', ok: false, error: e instanceof Error ? e.message : 'errore' }] });
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={`Avvisa i prenotati - ${template.name}`}
+      description={`${withPhone.length} ${withPhone.length === 1 ? 'persona raggiungibile' : 'persone raggiungibili'} · ${dateLabel}`}
+      size="lg"
+    >
+      <div className="space-y-5">
+        <div>
+          <Textarea
+            label="Messaggio (uguale per tutti)"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={8}
+          />
+        </div>
+
+        {/* MODALITA A: invio automatico via OpenWA */}
+        {openwaStatus === 'available' && (
+          <div className="p-3 rounded border border-accent/30 bg-accent/5">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="text-sm">
+                <div className="flex items-center gap-1.5 font-medium text-accent">
+                  <Zap className="h-4 w-4" />
+                  Invio automatico disponibile
+                </div>
+                <div className="text-xs text-text-muted mt-0.5">
+                  Manda a tutti i {withPhone.length} con un click, dal numero del circolo.
+                </div>
+              </div>
+              <Button onClick={sendAll} disabled={sending || withPhone.length === 0}>
+                {sending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
+                Invia a tutti ({withPhone.length})
+              </Button>
+            </div>
+
+            {sendResult && (
+              <div className="mt-3 pt-3 border-t border-accent/20">
+                <div className="text-sm">
+                  <span className="text-emerald-400">{sendResult.sent} inviati</span>
+                  {sendResult.failed > 0 && (
+                    <span className="text-red-400 ml-2">{sendResult.failed} falliti</span>
+                  )}
+                </div>
+                {sendResult.failed > 0 && (
+                  <div className="text-[10px] text-text-dim mt-1.5 space-y-0.5 max-h-24 overflow-y-auto">
+                    {sendResult.results.filter((r) => !r.ok).map((r, i) => (
+                      <div key={i}>{r.name}: {r.error}</div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {openwaStatus === 'checking' && (
+          <div className="p-2.5 rounded bg-bg-elevated text-xs text-text-muted flex items-center gap-2">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            Verifico se l&apos;invio automatico e disponibile...
+          </div>
+        )}
+
+        {/* MODALITA B: apri chat uno-per-uno (sempre presente come fallback) */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-xs font-medium text-text-muted">
+              {openwaStatus === 'available' ? 'Oppure apri le chat manualmente:' : 'Apri la chat di ciascuno:'}
+              {' '}({sentIds.size}/{withPhone.length})
+            </div>
+          </div>
+          <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
+            {withPhone.map((b) => {
+              const sent = sentIds.has(b.id);
+              return (
+                <div
+                  key={b.id}
+                  className={cn(
+                    'flex items-center gap-2 p-2.5 rounded border',
+                    sent ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-border bg-bg-elevated/40'
+                  )}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium text-text truncate">
+                      {b.first_name} {b.last_name}
+                    </div>
+                    <div className="text-[10px] text-text-dim flex items-center gap-1">
+                      <Phone className="h-2.5 w-2.5" />
+                      {b.phone}
+                    </div>
+                  </div>
+                  <Button size="sm" variant={sent ? 'ghost' : 'secondary'} onClick={() => openChat(b)}>
+                    {sent ? <><Check className="h-3.5 w-3.5 mr-1" /> Riapri</> : <><ExternalLink className="h-3.5 w-3.5 mr-1" /> Apri chat</>}
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {withoutPhone.length > 0 && (
+          <div className="p-3 rounded bg-amber-500/5 border border-amber-500/30">
+            <div className="text-xs text-amber-400 flex items-center gap-1.5 mb-1.5">
+              <AlertTriangle className="h-3.5 w-3.5" />
+              {withoutPhone.length} senza numero valido:
+            </div>
+            <div className="text-xs text-text-muted">
+              {withoutPhone.map((b) => `${b.first_name} ${b.last_name}`).join(', ')}
+            </div>
+          </div>
+        )}
+
+        <div className="flex justify-end gap-3 pt-2 border-t border-border">
+          <Button variant="ghost" onClick={onClose}>Chiudi</Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
