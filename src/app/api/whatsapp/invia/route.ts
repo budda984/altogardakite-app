@@ -3,6 +3,60 @@ import { getAuth } from '@/lib/auth';
 import { normalizePhone } from '@/lib/whatsapp';
 
 /**
+ * Controlla che la sessione WhatsApp sia 'ready'. Se non lo e', tenta
+ * un restart (POST .../start) e attende fino a ~15s che torni pronta.
+ * Ritorna { ready: boolean, status: string }.
+ */
+async function ensureSessionReady(
+  baseUrl: string,
+  sessionId: string,
+  apiKey: string | undefined
+): Promise<{ ready: boolean; status: string }> {
+  const headers: Record<string, string> = apiKey ? { 'X-API-Key': apiKey } : {};
+  const base = baseUrl.replace(/\/$/, '');
+
+  async function getStatus(): Promise<string> {
+    try {
+      const res = await fetch(`${base}/api/sessions/${sessionId}`, {
+        headers,
+        signal: AbortSignal.timeout(6000),
+      });
+      if (!res.ok) return 'unreachable';
+      const data = await res.json();
+      return data?.status || 'unknown';
+    } catch {
+      return 'unreachable';
+    }
+  }
+
+  // 1. Controllo iniziale
+  let status = await getStatus();
+  if (status === 'ready') return { ready: true, status };
+
+  // 2. Se non e' pronta (ma raggiungibile), prova a farla ripartire
+  if (status !== 'unreachable') {
+    try {
+      await fetch(`${base}/api/sessions/${sessionId}/start`, {
+        method: 'POST',
+        headers,
+        signal: AbortSignal.timeout(6000),
+      });
+    } catch {
+      // ignora: ricontrolliamo comunque lo stato sotto
+    }
+
+    // 3. Attende fino a ~15s controllando ogni 3s
+    for (let i = 0; i < 5; i++) {
+      await new Promise((r) => setTimeout(r, 3000));
+      status = await getStatus();
+      if (status === 'ready') return { ready: true, status };
+    }
+  }
+
+  return { ready: false, status };
+}
+
+/**
  * POST /api/whatsapp/invia
  *
  * Invia un messaggio WhatsApp a piu' destinatari tramite OpenWA self-hosted,
@@ -42,6 +96,19 @@ export async function POST(request: NextRequest) {
     }
     if (recipients.length === 0) {
       return NextResponse.json({ error: 'Nessun destinatario' }, { status: 400 });
+    }
+
+    // Controllo sessione: se non e' pronta, prova a riavviarla prima di inviare
+    const sessionCheck = await ensureSessionReady(baseUrl, sessionId, apiKey);
+    if (!sessionCheck.ready) {
+      const msg =
+        sessionCheck.status === 'unreachable'
+          ? 'OpenWA non raggiungibile. Controlla che il PC sia acceso e il tunnel attivo.'
+          : `Sessione WhatsApp non connessa (stato: ${sessionCheck.status}). Apri OpenWA e riscansiona il codice QR, poi riprova.`;
+      return NextResponse.json(
+        { error: msg, sessionStatus: sessionCheck.status, sessionDown: true },
+        { status: 503 }
+      );
     }
 
     const results: { name: string; phone: string; ok: boolean; warning?: boolean; error?: string }[] = [];
@@ -129,17 +196,34 @@ export async function GET() {
     }
 
     const baseUrl = process.env.OPENWA_URL;
+    const apiKey = process.env.OPENWA_API_KEY;
+    const sessionId = process.env.OPENWA_SESSION || 'altogarda';
     if (!baseUrl) {
       return NextResponse.json({ configured: false });
     }
 
+    const base = baseUrl.replace(/\/$/, '');
+    const headers: Record<string, string> = apiKey ? { 'X-API-Key': apiKey } : {};
+
+    // Controlla lo stato della sessione specifica
     try {
-      const res = await fetch(`${baseUrl.replace(/\/$/, '')}/health`, {
+      const res = await fetch(`${base}/api/sessions/${sessionId}`, {
+        headers,
         signal: AbortSignal.timeout(5000),
       });
-      return NextResponse.json({ configured: true, reachable: res.ok });
+      if (!res.ok) {
+        return NextResponse.json({ configured: true, reachable: true, sessionReady: false, sessionStatus: 'not_found' });
+      }
+      const data = await res.json();
+      const ready = data?.status === 'ready';
+      return NextResponse.json({
+        configured: true,
+        reachable: true,
+        sessionReady: ready,
+        sessionStatus: data?.status || 'unknown',
+      });
     } catch {
-      return NextResponse.json({ configured: true, reachable: false });
+      return NextResponse.json({ configured: true, reachable: false, sessionReady: false });
     }
   } catch (e) {
     return NextResponse.json(

@@ -372,7 +372,8 @@ function NotifyWhatsappModal({
   const [sentIds, setSentIds] = useState<Set<string>>(new Set());
 
   // Stato OpenWA
-  const [openwaStatus, setOpenwaStatus] = useState<'checking' | 'available' | 'unavailable'>('checking');
+  const [openwaStatus, setOpenwaStatus] = useState<'checking' | 'available' | 'session_down' | 'unavailable'>('checking');
+  const [sessionStatusLabel, setSessionStatusLabel] = useState<string>('');
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState<{ sent: number; failed: number; uncertain?: number; results: { name: string; ok: boolean; warning?: boolean; error?: string }[] } | null>(null);
 
@@ -385,8 +386,14 @@ function NotifyWhatsappModal({
     fetch('/api/whatsapp/invia')
       .then((r) => r.json())
       .then((d) => {
-        if (d.configured && d.reachable) setOpenwaStatus('available');
-        else setOpenwaStatus('unavailable');
+        if (!d.configured || !d.reachable) {
+          setOpenwaStatus('unavailable');
+        } else if (d.sessionReady) {
+          setOpenwaStatus('available');
+        } else {
+          setOpenwaStatus('session_down');
+          setSessionStatusLabel(d.sessionStatus || '');
+        }
       })
       .catch(() => setOpenwaStatus('unavailable'));
   }, [open]);
@@ -415,7 +422,14 @@ function NotifyWhatsappModal({
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Errore invio');
+      if (!res.ok) {
+        // Se la sessione e' caduta, aggiorna lo stato del modale
+        if (data.sessionDown) {
+          setOpenwaStatus('session_down');
+          setSessionStatusLabel(data.sessionStatus || '');
+        }
+        throw new Error(data.error || 'Errore invio');
+      }
       setSendResult(data);
     } catch (e) {
       setSendResult({ sent: 0, failed: withPhone.length, results: [{ name: 'Errore', ok: false, error: e instanceof Error ? e.message : 'errore' }] });
@@ -490,6 +504,20 @@ function NotifyWhatsappModal({
           <div className="p-2.5 rounded bg-bg-elevated text-xs text-text-muted flex items-center gap-2">
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
             Verifico se l&apos;invio automatico e disponibile...
+          </div>
+        )}
+
+        {openwaStatus === 'session_down' && (
+          <div className="p-3 rounded border border-amber-500/40 bg-amber-500/5">
+            <div className="flex items-center gap-1.5 text-sm font-medium text-amber-400">
+              <AlertTriangle className="h-4 w-4" />
+              WhatsApp disconnesso
+            </div>
+            <div className="text-xs text-text-muted mt-1">
+              La sessione WhatsApp non e collegata{sessionStatusLabel ? ` (stato: ${sessionStatusLabel})` : ''}.
+              Apri OpenWA sul PC del circolo e riscansiona il codice QR.
+              Intanto puoi usare &quot;Apri chat&quot; qui sotto per inviare manualmente.
+            </div>
           </div>
         )}
 
