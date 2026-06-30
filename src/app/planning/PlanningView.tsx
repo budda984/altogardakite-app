@@ -249,22 +249,27 @@ export default function PlanningView({
         >
           <ChevronLeft className="h-5 w-5" />
         </button>
-        <div className="flex items-center gap-3">
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => navigate(e.target.value)}
-            className="bg-bg-elevated border border-border rounded px-3 py-1.5 text-sm text-text focus:outline-none focus:ring-2 focus:ring-accent/50"
-            style={{ colorScheme: 'dark' }}
-          />
-          {!isToday && (
-            <button
-              onClick={() => navigate(today)}
-              className="text-xs px-2 py-1 rounded bg-accent/10 text-accent hover:bg-accent/20"
-            >
-              Vai a oggi
-            </button>
-          )}
+        <div className="flex flex-col items-center gap-1.5">
+          <span className="text-sm font-display font-semibold text-text capitalize">
+            {new Date(date + 'T12:00:00').toLocaleDateString('it-IT', { weekday: 'long' })}
+          </span>
+          <div className="flex items-center gap-3">
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => navigate(e.target.value)}
+              className="bg-bg-elevated border border-border rounded px-3 py-1.5 text-sm text-text focus:outline-none focus:ring-2 focus:ring-accent/50"
+              style={{ colorScheme: 'dark' }}
+            />
+            {!isToday && (
+              <button
+                onClick={() => navigate(today)}
+                className="text-xs px-2 py-1 rounded bg-accent/10 text-accent hover:bg-accent/20"
+              >
+                Vai a oggi
+              </button>
+            )}
+          </div>
         </div>
         <button
           onClick={() => navigate(shiftDate(date, 1))}
