@@ -23,6 +23,7 @@ import GenerateDayModal from './GenerateDayModal';
 import EditOutingModal from './EditOutingModal';
 import CancelOutingModal from './CancelOutingModal';
 import BookingsView from './BookingsView';
+import WeekView from './WeekView';
 
 interface OutingParticipant {
   id: string;
@@ -94,7 +95,7 @@ export default function PlanningView({
   const [showGenerate, setShowGenerate] = useState(false);
 
   // Vista corrente: prenotazioni (lista persone per slot) o uscite (vista per barca)
-  const [view, setView] = useState<'bookings' | 'outings'>('bookings');
+  const [view, setView] = useState<'bookings' | 'outings' | 'week'>('bookings');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -238,7 +239,8 @@ export default function PlanningView({
         </div>
       </div>
 
-      {/* Date navigator */}
+      {/* Date navigator (solo viste giornaliere) */}
+      {view !== 'week' && (
       <div className="bg-bg-surface border border-border rounded-lg p-4 mb-6 flex items-center justify-between gap-3">
         <button
           onClick={() => navigate(shiftDate(date, -1))}
@@ -272,8 +274,9 @@ export default function PlanningView({
           <ChevronRight className="h-5 w-5" />
         </button>
       </div>
+      )}
 
-      {/* TAB SWITCHER: Prenotazioni / Uscite barca */}
+      {/* TAB SWITCHER: Prenotazioni / Uscite barca / Settimana */}
       <div className="flex gap-2 mb-4 border-b border-border">
         <button
           onClick={() => setView('bookings')}
@@ -302,7 +305,26 @@ export default function PlanningView({
             </span>
           )}
         </button>
+        <button
+          onClick={() => setView('week')}
+          className={cn(
+            'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5',
+            view === 'week'
+              ? 'border-accent text-accent'
+              : 'border-transparent text-text-muted hover:text-text'
+          )}
+        >
+          <CalendarDays className="h-3.5 w-3.5" />
+          Settimana
+        </button>
       </div>
+
+      {view === 'week' && (
+        <WeekView
+          initialStart={date}
+          onOpenDay={(d) => { navigate(d); setView('bookings'); }}
+        />
+      )}
 
       {view === 'bookings' && (
         <BookingsView
