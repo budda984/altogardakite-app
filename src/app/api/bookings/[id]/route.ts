@@ -46,3 +46,57 @@ export async function DELETE(
     );
   }
 }
+
+/**
+ * PATCH /api/bookings/[id] - sposta una prenotazione da/verso lista d'attesa
+ * Body: { is_waitlist: boolean }
+ */
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id: bookingId } = await params;
+    const auth = await getAuth();
+    if (!auth?.isStaff) {
+      return NextResponse.json({ error: 'Non autorizzato' }, { status: 403 });
+    }
+
+    const body = await request.json();
+    if (typeof body.is_waitlist !== 'boolean') {
+      return NextResponse.json({ error: 'is_waitlist mancante' }, { status: 400 });
+    }
+
+    const supabase = await createClient();
+
+    const { data: booking } = await supabase
+      .from('bookings')
+      .select('status')
+      .eq('id', bookingId)
+      .single();
+    if (!booking) {
+      return NextResponse.json({ error: 'Prenotazione non trovata' }, { status: 404 });
+    }
+    if (booking.status !== 'pending') {
+      return NextResponse.json(
+        { error: 'Solo le prenotazioni non ancora assegnate possono essere spostate' },
+        { status: 409 }
+      );
+    }
+
+    const { error } = await supabase
+      .from('bookings')
+      .update({ is_waitlist: body.is_waitlist })
+      .eq('id', bookingId);
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : 'Errore server' },
+      { status: 500 }
+    );
+  }
+}

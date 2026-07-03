@@ -546,6 +546,7 @@ export interface Booking {
   participation_type: ParticipationType;
   notes: string | null;
   status: BookingStatus;
+  is_waitlist: boolean;
   outing_id: string | null;
   participant_id: string | null;
   created_at: string;

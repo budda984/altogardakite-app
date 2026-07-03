@@ -33,6 +33,7 @@ export async function GET(request: NextRequest) {
       .gte('booking_date', start)
       .lte('booking_date', end)
       .eq('status', 'pending')
+      .eq('is_waitlist', false)
       .order('first_name', { ascending: true });
 
     // Uscite della settimana

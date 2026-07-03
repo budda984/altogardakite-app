@@ -74,7 +74,7 @@ export default function AdvancedPlanner({
         const data = await bookingsRes.json();
         const all: BookingWithMember[] = data.bookings || data || [];
         loadedBookings = all.filter(
-          (b) => b.session_template_id === templateId && b.status === 'pending'
+          (b) => b.session_template_id === templateId && b.status === 'pending' && !b.is_waitlist
         );
       }
       setBookings(loadedBookings);

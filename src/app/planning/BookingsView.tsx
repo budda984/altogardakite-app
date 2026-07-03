@@ -5,6 +5,7 @@ import {
   Plus, Loader2, Trash2, Anchor, Wind, Sparkles, AlertTriangle,
   Users, Sailboat, ChevronRight, GraduationCap, Heart,
   MessageCircle, Send, Phone, Check, Zap, ExternalLink,
+  Clock, ArrowUp,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/Button';
@@ -92,6 +93,23 @@ export default function BookingsView({
     }
   };
 
+  const handleToggleWaitlist = async (bookingId: string, toWaitlist: boolean) => {
+    try {
+      const res = await fetch(`/api/bookings/${bookingId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_waitlist: toWaitlist }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || 'Errore');
+      }
+      load();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Errore');
+    }
+  };
+
   if (loading) {
     return (
       <div className="p-12 text-center bg-bg-surface border border-border rounded-lg">
@@ -135,9 +153,10 @@ export default function BookingsView({
             template={template}
             bookings={slotBookings}
             onAddBooking={() => setAddBookingFor(template)}
-            onCreateOuting={() => setCreateOutingFor({ template, bookings: slotBookings })}
+            onCreateOuting={() => setCreateOutingFor({ template, bookings: slotBookings.filter((b) => !b.is_waitlist) })}
             onDeleteBooking={handleDeleteBooking}
-            onNotify={() => setNotifyFor({ template, bookings: slotBookings })}
+            onNotify={() => setNotifyFor({ template, bookings: slotBookings.filter((b) => !b.is_waitlist) })}
+            onToggleWaitlist={handleToggleWaitlist}
           />
         );
       })}
@@ -187,7 +206,7 @@ export default function BookingsView({
 // SlotBlock - una sessione (Peler / Ora / Ora late ecc.)
 // ============================================================================
 function SlotBlock({
-  template, bookings, onAddBooking, onCreateOuting, onDeleteBooking, onNotify,
+  template, bookings, onAddBooking, onCreateOuting, onDeleteBooking, onNotify, onToggleWaitlist,
 }: {
   template: SessionTemplate;
   bookings: BookingWithMember[];
@@ -195,6 +214,7 @@ function SlotBlock({
   onCreateOuting: () => void;
   onDeleteBooking: (bookingId: string, memberName: string) => void;
   onNotify: () => void;
+  onToggleWaitlist: (bookingId: string, toWaitlist: boolean) => void;
 }) {
   return (
     <div className="bg-bg-surface border border-border rounded-lg overflow-hidden">
@@ -219,7 +239,12 @@ function SlotBlock({
             <div className="text-xs text-text-muted mt-1">
               {bookings.length === 0
                 ? 'Nessuna prenotazione'
-                : `${bookings.length} ${bookings.length === 1 ? 'prenotazione' : 'prenotazioni'}`}
+                : (() => {
+                    const conf = bookings.filter((b) => !b.is_waitlist).length;
+                    const wait = bookings.filter((b) => b.is_waitlist).length;
+                    return `${conf} ${conf === 1 ? 'confermata' : 'confermate'}` +
+                      (wait > 0 ? ` · ${wait} in attesa` : '');
+                  })()}
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -249,15 +274,40 @@ function SlotBlock({
             Click <strong>Prenota socio</strong> per aggiungere il primo.
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-            {bookings.map((b) => (
-              <BookingCard
-                key={b.id}
-                booking={b}
-                onDelete={() => onDeleteBooking(b.id, `${b.first_name} ${b.last_name}`)}
-              />
-            ))}
-          </div>
+          <>
+            {/* Confermati */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+              {bookings.filter((b) => !b.is_waitlist).map((b) => (
+                <BookingCard
+                  key={b.id}
+                  booking={b}
+                  onDelete={() => onDeleteBooking(b.id, `${b.first_name} ${b.last_name}`)}
+                  onToggleWaitlist={() => onToggleWaitlist(b.id, true)}
+                />
+              ))}
+            </div>
+
+            {/* Lista d'attesa */}
+            {bookings.some((b) => b.is_waitlist) && (
+              <div className="mt-4">
+                <div className="flex items-center gap-1.5 text-xs font-medium text-amber-400 mb-2">
+                  <Clock className="h-3.5 w-3.5" />
+                  Lista d&apos;attesa ({bookings.filter((b) => b.is_waitlist).length})
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {bookings.filter((b) => b.is_waitlist).map((b) => (
+                    <BookingCard
+                      key={b.id}
+                      booking={b}
+                      waitlist
+                      onDelete={() => onDeleteBooking(b.id, `${b.first_name} ${b.last_name}`)}
+                      onToggleWaitlist={() => onToggleWaitlist(b.id, false)}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -268,10 +318,12 @@ function SlotBlock({
 // BookingCard - singola prenotazione
 // ============================================================================
 function BookingCard({
-  booking, onDelete,
+  booking, onDelete, onToggleWaitlist, waitlist,
 }: {
   booking: BookingWithMember;
   onDelete: () => void;
+  onToggleWaitlist: () => void;
+  waitlist?: boolean;
 }) {
   // Avvisi
   const today = new Date().toISOString().slice(0, 10);
@@ -285,8 +337,9 @@ function BookingCard({
 
   return (
     <div className={cn(
-      'flex items-center gap-2 p-2.5 rounded border bg-bg-elevated/40',
-      hasIssues ? 'border-amber-500/30 bg-amber-500/[0.02]' : 'border-border'
+      'flex items-center gap-2 p-2.5 rounded border',
+      waitlist ? 'bg-amber-500/[0.03] border-amber-500/20' :
+      hasIssues ? 'border-amber-500/30 bg-amber-500/[0.02]' : 'border-border bg-bg-elevated/40'
     )}>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5 flex-wrap">
@@ -332,6 +385,18 @@ function BookingCard({
           )}
         </div>
       </div>
+      <button
+        onClick={onToggleWaitlist}
+        className={cn(
+          'p-1 rounded shrink-0',
+          waitlist
+            ? 'hover:bg-emerald-500/10 text-text-dim hover:text-emerald-400'
+            : 'hover:bg-amber-500/10 text-text-dim hover:text-amber-400'
+        )}
+        title={waitlist ? 'Sposta tra i confermati' : 'Metti in lista d\'attesa'}
+      >
+        {waitlist ? <ArrowUp className="h-3.5 w-3.5" /> : <Clock className="h-3.5 w-3.5" />}
+      </button>
       <button
         onClick={onDelete}
         className="p-1 rounded hover:bg-red-500/10 text-text-dim hover:text-red-400 shrink-0"
