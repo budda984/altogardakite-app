@@ -3,10 +3,11 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import {
   Loader2, Sailboat, GraduationCap, AlertTriangle, Check,
-  Plus, X, ChevronDown, Anchor, Inbox, Sparkles, Cloud,
+  Plus, X, ChevronDown, Anchor, Inbox, Sparkles, Cloud, FileDown,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
+import { generatePlannerPdf } from '@/app/report/pdfGenerators';
 import type {
   Boat, Instructor, SessionTemplate, BookingWithMember, LiftDiscipline,
 } from '@/lib/types';
@@ -243,6 +244,44 @@ export default function AdvancedPlanner({
     };
   }, [drag, assignBooking, removeFromColumns]);
 
+  // ============== STAMPA PDF ==============
+  function exportPdf() {
+    if (!selectedTemplate) return;
+    const pdfColumns = columns
+      .filter((c) => c.bookingIds.length > 0)
+      .map((c) => {
+        const boat = boats.find((b) => b.id === c.boatId);
+        return {
+          boatName: boat?.name || 'Barca',
+          boatCapacity: boat?.capacity ?? null,
+          instructors: c.instructorIds
+            .map((id) => {
+              const ins = instructors.find((i) => i.id === id);
+              return ins ? `${ins.first_name} ${ins.last_name}` : '';
+            })
+            .filter(Boolean),
+          participants: c.bookingIds.map((id) => {
+            const b = bookingById[id];
+            return {
+              name: b ? `${b.first_name} ${b.last_name}` : '?',
+              discipline: b?.preferred_discipline || undefined,
+              participation: b?.participation_type || undefined,
+            };
+          }),
+        };
+      });
+
+    generatePlannerPdf({
+      date,
+      sessionName: selectedTemplate.name,
+      columns: pdfColumns,
+      unassigned: cestoBookings.map((b) => ({
+        name: `${b.first_name} ${b.last_name}`,
+        discipline: b.preferred_discipline || undefined,
+      })),
+    });
+  }
+
   // ============== CREA BOZZE ==============
   async function createDrafts() {
     const validColumns = columns.filter((c) => c.bookingIds.length > 0);
@@ -369,10 +408,16 @@ export default function AdvancedPlanner({
           </span>
         </div>
         {columns.length > 0 && (
-          <Button onClick={createDrafts} disabled={creating || assignedIds.size === 0}>
-            {creating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
-            Crea bozze ({columns.filter((c) => c.bookingIds.length > 0).length})
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" onClick={exportPdf} disabled={assignedIds.size === 0}>
+              <FileDown className="h-4 w-4 mr-2" />
+              Stampa PDF
+            </Button>
+            <Button onClick={createDrafts} disabled={creating || assignedIds.size === 0}>
+              {creating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
+              Crea bozze ({columns.filter((c) => c.bookingIds.length > 0).length})
+            </Button>
+          </div>
         )}
       </div>
 

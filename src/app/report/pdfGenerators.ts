@@ -545,3 +545,97 @@ export function generateDayReport(data: DayData) {
 
   downloadPdf(doc, `giornata_${date}.pdf`);
 }
+
+// ============================================================================
+// PLANNER — piano di lavoro di una sessione (barche, istruttori, partecipanti)
+// ============================================================================
+export interface PlannerPdfColumn {
+  boatName: string;
+  boatCapacity: number | null;
+  instructors: string[];
+  participants: { name: string; discipline?: string; participation?: string }[];
+}
+export interface PlannerPdfData {
+  date: string;
+  sessionName: string;
+  columns: PlannerPdfColumn[];
+  unassigned: { name: string; discipline?: string }[];
+}
+
+export function generatePlannerPdf(data: PlannerPdfData) {
+  const dateLabel = new Date(data.date + 'T12:00:00').toLocaleDateString('it-IT', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  });
+  const doc = setupDoc(`Piano sessione: ${data.sessionName}`, dateLabel);
+  let y = 46;
+
+  const totalAssigned = data.columns.reduce((s, c) => s + c.participants.length, 0);
+  doc.setFontSize(10);
+  doc.setTextColor(80, 80, 80);
+  doc.text(
+    `${data.columns.length} imbarcazioni · ${totalAssigned} partecipanti assegnati` +
+    (data.unassigned.length > 0 ? ` · ${data.unassigned.length} non assegnati` : ''),
+    14, y
+  );
+  y += 8;
+
+  // Una tabella per ogni barca
+  for (const col of data.columns) {
+    if (y > 250) { doc.addPage(); y = 20; }
+
+    doc.setFontSize(12);
+    doc.setTextColor(0, 0, 0);
+    const cap = col.boatCapacity ? `/${col.boatCapacity}` : '';
+    doc.text(`${col.boatName}  (${col.participants.length}${cap})`, 14, y);
+    y += 5;
+
+    if (col.instructors.length > 0) {
+      doc.setFontSize(9);
+      doc.setTextColor(100, 100, 100);
+      doc.text(`Istruttori: ${col.instructors.join(', ')}`, 14, y);
+      y += 5;
+    }
+
+    autoTable(doc, {
+      startY: y,
+      head: [['#', 'Partecipante', 'Disciplina', 'Tipo']],
+      body: col.participants.length > 0
+        ? col.participants.map((p, i) => [
+            String(i + 1),
+            p.name,
+            p.discipline ? (DISCIPLINE_LABELS[p.discipline] || p.discipline) : '—',
+            p.participation ? (PARTECIPATION_LABELS[p.participation] || p.participation) : '—',
+          ])
+        : [['—', 'Nessun partecipante', '', '']],
+      theme: 'striped',
+      headStyles: { fillColor: [93, 206, 170] },
+      styles: { fontSize: 9 },
+      margin: { left: 14, right: 14 },
+    });
+    y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
+  }
+
+  // Non assegnati
+  if (data.unassigned.length > 0) {
+    if (y > 250) { doc.addPage(); y = 20; }
+    doc.setFontSize(12);
+    doc.setTextColor(180, 100, 0);
+    doc.text(`Non assegnati (${data.unassigned.length})`, 14, y);
+    y += 5;
+    autoTable(doc, {
+      startY: y,
+      head: [['Partecipante', 'Disciplina']],
+      body: data.unassigned.map((p) => [
+        p.name,
+        p.discipline ? (DISCIPLINE_LABELS[p.discipline] || p.discipline) : '—',
+      ]),
+      theme: 'plain',
+      headStyles: { fillColor: [240, 220, 200], textColor: [120, 80, 0] },
+      styles: { fontSize: 9 },
+      margin: { left: 14, right: 14 },
+    });
+  }
+
+  addFooter(doc);
+  downloadPdf(doc, `piano_${data.sessionName}_${data.date}.pdf`);
+}
