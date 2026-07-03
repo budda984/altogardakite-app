@@ -24,6 +24,7 @@ import EditOutingModal from './EditOutingModal';
 import CancelOutingModal from './CancelOutingModal';
 import BookingsView from './BookingsView';
 import WeekView from './WeekView';
+import AdvancedPlanner from './AdvancedPlanner';
 
 interface OutingParticipant {
   id: string;
@@ -95,7 +96,7 @@ export default function PlanningView({
   const [showGenerate, setShowGenerate] = useState(false);
 
   // Vista corrente: prenotazioni (lista persone per slot) o uscite (vista per barca)
-  const [view, setView] = useState<'bookings' | 'outings' | 'week'>('bookings');
+  const [view, setView] = useState<'bookings' | 'outings' | 'week' | 'planner'>('bookings');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -322,7 +323,29 @@ export default function PlanningView({
           <CalendarDays className="h-3.5 w-3.5" />
           Settimana
         </button>
+        <button
+          onClick={() => setView('planner')}
+          className={cn(
+            'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5',
+            view === 'planner'
+              ? 'border-accent text-accent'
+              : 'border-transparent text-text-muted hover:text-text'
+          )}
+        >
+          <Sparkles className="h-3.5 w-3.5" />
+          Planner
+        </button>
       </div>
+
+      {view === 'planner' && (
+        <AdvancedPlanner
+          date={date}
+          templates={templates}
+          boats={boats}
+          instructors={instructors}
+          onCreated={load}
+        />
+      )}
 
       {view === 'week' && (
         <WeekView
