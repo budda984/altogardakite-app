@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import {
-  Loader2, Users, Sailboat, GraduationCap, AlertTriangle, Check,
-  Plus, X, ChevronDown, Anchor, Inbox, Sparkles,
+  Loader2, Sailboat, GraduationCap, AlertTriangle, Check,
+  Plus, X, ChevronDown, Anchor, Inbox, Sparkles, Cloud,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
@@ -20,12 +20,18 @@ interface Props {
   onCreated: () => void;
 }
 
-// Una colonna = una barca con istruttori assegnati + i prenotati trascinati dentro
 interface Column {
-  id: string;            // id univoco colonna (usiamo boat_id)
   boatId: string;
   instructorIds: string[];
-  bookingIds: string[];  // prenotati assegnati
+  bookingIds: string[];
+}
+
+interface DragState {
+  bookingId: string;
+  x: number;
+  y: number;
+  active: boolean;   // true dopo aver superato la soglia di movimento
+  hoverDropId: string | null; // 'cesto' o boatId
 }
 
 export default function AdvancedPlanner({
@@ -38,53 +44,110 @@ export default function AdvancedPlanner({
   const [creating, setCreating] = useState(false);
   const [result, setResult] = useState<{ ok: number; fail: number; errors: string[] } | null>(null);
 
-  // Mobile: bolla selezionata per "assegna a"
+  // Tap-to-assign (alternativa al drag)
   const [pickBooking, setPickBooking] = useState<string | null>(null);
-  // Drag desktop
-  const [draggingId, setDraggingId] = useState<string | null>(null);
 
-  // Carica prenotati della sessione scelta
-  const loadBookings = useCallback(async (templateId: string) => {
+  // Drag pointer-based (mouse + touch)
+  const [drag, setDrag] = useState<DragState | null>(null);
+  const dragRef = useRef<DragState | null>(null);
+  dragRef.current = drag;
+  const startPos = useRef<{ x: number; y: number } | null>(null);
+
+  // Salvataggio condiviso
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const skipNextSave = useRef(true); // non salvare al primo load
+
+  // ============== CARICAMENTO ==============
+  const loadAll = useCallback(async (templateId: string) => {
     setLoading(true);
     setResult(null);
     try {
-      const res = await fetch(`/api/bookings?date=${date}`);
-      if (res.ok) {
-        const data = await res.json();
+      const [bookingsRes, planRes] = await Promise.all([
+        fetch(`/api/bookings?date=${date}`),
+        fetch(`/api/planning/piano?date=${date}&template_id=${templateId}`),
+      ]);
+
+      let loadedBookings: BookingWithMember[] = [];
+      if (bookingsRes.ok) {
+        const data = await bookingsRes.json();
         const all: BookingWithMember[] = data.bookings || data || [];
-        setBookings(all.filter((b) => b.session_template_id === templateId && b.status === 'pending'));
+        loadedBookings = all.filter(
+          (b) => b.session_template_id === templateId && b.status === 'pending'
+        );
+      }
+      setBookings(loadedBookings);
+
+      // Ripristina piano salvato, tenendo solo bookingIds ancora validi/pending
+      if (planRes.ok) {
+        const plan = await planRes.json();
+        const validIds = new Set(loadedBookings.map((b) => b.id));
+        const restored: Column[] = (plan.columns || [])
+          .map((c: Column) => ({
+            boatId: c.boatId,
+            instructorIds: c.instructorIds || [],
+            bookingIds: (c.bookingIds || []).filter((id: string) => validIds.has(id)),
+          }))
+          // tieni solo colonne di barche ancora esistenti
+          .filter((c: Column) => boats.some((b) => b.id === c.boatId));
+        skipNextSave.current = true;
+        setColumns(restored);
+      } else {
+        skipNextSave.current = true;
+        setColumns([]);
       }
     } finally {
       setLoading(false);
     }
-  }, [date]);
+  }, [date, boats]);
 
   useEffect(() => {
-    if (selectedTemplate) {
-      loadBookings(selectedTemplate.id);
-      setColumns([]);
-    }
-  }, [selectedTemplate, loadBookings]);
+    if (selectedTemplate) loadAll(selectedTemplate.id);
+  }, [selectedTemplate, loadAll]);
 
-  // Prenotati non ancora assegnati (nel cesto)
+  // ============== AUTO-SAVE (debounce 1.2s) ==============
+  useEffect(() => {
+    if (!selectedTemplate) return;
+    if (skipNextSave.current) {
+      skipNextSave.current = false;
+      return;
+    }
+    setSaveState('saving');
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(async () => {
+      try {
+        await fetch('/api/planning/piano', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            date,
+            template_id: selectedTemplate.id,
+            columns,
+          }),
+        });
+        setSaveState('saved');
+      } catch {
+        setSaveState('idle');
+      }
+    }, 1200);
+    return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
+  }, [columns, selectedTemplate, date]);
+
+  // ============== INDICI ==============
   const assignedIds = useMemo(() => new Set(columns.flatMap((c) => c.bookingIds)), [columns]);
   const cestoBookings = bookings.filter((b) => !assignedIds.has(b.id));
-
   const bookingById = useMemo(() => {
     const m: Record<string, BookingWithMember> = {};
     bookings.forEach((b) => { m[b.id] = b; });
     return m;
   }, [bookings]);
 
-  // === Gestione colonne ===
+  // ============== AZIONI COLONNE ==============
   function toggleBoatColumn(boatId: string) {
     setColumns((prev) => {
       const exists = prev.find((c) => c.boatId === boatId);
-      if (exists) {
-        // Rimuovi colonna: i prenotati tornano nel cesto automaticamente
-        return prev.filter((c) => c.boatId !== boatId);
-      }
-      return [...prev, { id: boatId, boatId, instructorIds: [], bookingIds: [] }];
+      if (exists) return prev.filter((c) => c.boatId !== boatId);
+      return [...prev, { boatId, instructorIds: [], bookingIds: [] }];
     });
   }
 
@@ -101,27 +164,89 @@ export default function AdvancedPlanner({
     }));
   }
 
-  function assignBooking(bookingId: string, boatId: string) {
+  const assignBooking = useCallback((bookingId: string, boatId: string) => {
     setColumns((prev) => prev.map((c) => {
-      // togli da tutte le colonne, poi metti in quella giusta
       const cleaned = c.bookingIds.filter((id) => id !== bookingId);
       if (c.boatId === boatId) return { ...c, bookingIds: [...cleaned, bookingId] };
       return { ...c, bookingIds: cleaned };
     }));
     setPickBooking(null);
-  }
+  }, []);
 
-  function removeFromColumn(bookingId: string) {
+  const removeFromColumns = useCallback((bookingId: string) => {
     setColumns((prev) => prev.map((c) => ({
       ...c,
       bookingIds: c.bookingIds.filter((id) => id !== bookingId),
     })));
-  }
+  }, []);
 
-  // === Creazione bozze ===
+  // ============== DRAG POINTER-BASED (mouse + touch) ==============
+  const onBubblePointerDown = useCallback((e: React.PointerEvent, bookingId: string) => {
+    // Solo tasto principale / tocco
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    startPos.current = { x: e.clientX, y: e.clientY };
+    setDrag({ bookingId, x: e.clientX, y: e.clientY, active: false, hoverDropId: null });
+  }, []);
+
+  useEffect(() => {
+    if (!drag) return;
+
+    function findDropId(x: number, y: number): string | null {
+      const el = document.elementFromPoint(x, y);
+      const drop = el?.closest('[data-drop-id]') as HTMLElement | null;
+      return drop?.dataset.dropId || null;
+    }
+
+    function onMove(e: PointerEvent) {
+      const cur = dragRef.current;
+      if (!cur || !startPos.current) return;
+      const dx = e.clientX - startPos.current.x;
+      const dy = e.clientY - startPos.current.y;
+      const dist = Math.hypot(dx, dy);
+      const active = cur.active || dist > 8;
+      if (active) e.preventDefault(); // blocca lo scroll durante il drag
+      setDrag({
+        ...cur,
+        x: e.clientX,
+        y: e.clientY,
+        active,
+        hoverDropId: active ? findDropId(e.clientX, e.clientY) : null,
+      });
+    }
+
+    function onUp(e: PointerEvent) {
+      const cur = dragRef.current;
+      startPos.current = null;
+      if (!cur) return;
+      if (cur.active) {
+        const dropId = findDropId(e.clientX, e.clientY);
+        if (dropId === 'cesto') {
+          removeFromColumns(cur.bookingId);
+        } else if (dropId) {
+          assignBooking(cur.bookingId, dropId);
+        }
+        // drop fuori: nessuna azione, resta dov'era
+      } else {
+        // Era un tap: apri/chiudi menu assegnazione
+        setPickBooking((prev) => (prev === cur.bookingId ? null : cur.bookingId));
+      }
+      setDrag(null);
+    }
+
+    window.addEventListener('pointermove', onMove, { passive: false });
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+    };
+  }, [drag, assignBooking, removeFromColumns]);
+
+  // ============== CREA BOZZE ==============
   async function createDrafts() {
     const validColumns = columns.filter((c) => c.bookingIds.length > 0);
-    if (validColumns.length === 0) return;
+    if (validColumns.length === 0 || !selectedTemplate) return;
 
     setCreating(true);
     setResult(null);
@@ -130,7 +255,6 @@ export default function AdvancedPlanner({
 
     for (const col of validColumns) {
       const boat = boats.find((b) => b.id === col.boatId);
-      // Disciplina: prendi quella prevalente tra i prenotati, fallback 'kite'
       const discs = col.bookingIds
         .map((id) => bookingById[id]?.preferred_discipline)
         .filter(Boolean) as LiftDiscipline[];
@@ -143,11 +267,11 @@ export default function AdvancedPlanner({
           body: JSON.stringify({
             booking_ids: col.bookingIds,
             outing_date: date,
-            session_template_id: selectedTemplate!.id,
+            session_template_id: selectedTemplate.id,
             boat_id: col.boatId,
             discipline,
-            departure_time: selectedTemplate?.default_departure_time || '',
-            return_time: selectedTemplate?.default_return_time || '',
+            departure_time: selectedTemplate.default_departure_time || '',
+            return_time: selectedTemplate.default_return_time || '',
             instructor_ids: col.instructorIds,
           }),
         });
@@ -166,20 +290,27 @@ export default function AdvancedPlanner({
 
     setResult({ ok, fail, errors });
     setCreating(false);
+
     if (ok > 0) {
-      // ricarica prenotati (quelli assegnati sono ora 'assigned')
-      await loadBookings(selectedTemplate!.id);
-      setColumns([]);
+      // Azzera il piano salvato (le uscite ora esistono come bozze)
+      try {
+        await fetch('/api/planning/piano', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ date, template_id: selectedTemplate.id, columns: [] }),
+        });
+      } catch { /* non bloccante */ }
+      await loadAll(selectedTemplate.id);
       onCreated();
     }
   }
 
-  // === RENDER ===
+  // ============== RENDER ==============
   if (!selectedTemplate) {
     return (
       <div className="space-y-4">
         <div className="text-sm text-text-muted">
-          Scegli la sessione da pianificare. Vedrai i prenotati di quella sessione come bolle da assegnare alle barche.
+          Scegli la sessione da pianificare. Il piano si salva da solo ed e visibile a tutto lo staff.
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
           {templates.map((t) => (
@@ -204,10 +335,21 @@ export default function AdvancedPlanner({
 
   const usedBoatIds = new Set(columns.map((c) => c.boatId));
   const unassignedCount = cestoBookings.length;
+  const draggedBooking = drag?.active ? bookingById[drag.bookingId] : null;
 
   return (
     <div className="space-y-5">
-      {/* Header sessione scelta */}
+      {/* Ghost del drag */}
+      {draggedBooking && (
+        <div
+          className="fixed z-50 pointer-events-none px-3 py-1.5 rounded-lg bg-accent text-bg text-sm font-medium shadow-lg"
+          style={{ left: drag!.x + 10, top: drag!.y - 20 }}
+        >
+          {draggedBooking.first_name} {draggedBooking.last_name}
+        </div>
+      )}
+
+      {/* Header */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2">
           <button
@@ -217,6 +359,14 @@ export default function AdvancedPlanner({
             ← Cambia sessione
           </button>
           <span className="font-display font-semibold text-lg">{selectedTemplate.name}</span>
+          {/* Indicatore salvataggio */}
+          <span className={cn(
+            'text-[10px] flex items-center gap-1 px-1.5 py-0.5 rounded',
+            saveState === 'saving' ? 'text-amber-400' : saveState === 'saved' ? 'text-emerald-400' : 'text-text-dim'
+          )}>
+            <Cloud className="h-3 w-3" />
+            {saveState === 'saving' ? 'Salvataggio...' : saveState === 'saved' ? 'Salvato' : 'Condiviso'}
+          </span>
         </div>
         {columns.length > 0 && (
           <Button onClick={createDrafts} disabled={creating || assignedIds.size === 0}>
@@ -226,7 +376,6 @@ export default function AdvancedPlanner({
         )}
       </div>
 
-      {/* Risultato creazione */}
       {result && (
         <div className={cn(
           'p-3 rounded border text-sm',
@@ -270,8 +419,14 @@ export default function AdvancedPlanner({
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4">
-          {/* CESTO prenotati */}
-          <div className="rounded-lg border border-border bg-bg-surface p-3">
+          {/* CESTO */}
+          <div
+            data-drop-id="cesto"
+            className={cn(
+              'rounded-lg border bg-bg-surface p-3 transition-colors',
+              drag?.active && drag.hoverDropId === 'cesto' ? 'border-accent bg-accent/5' : 'border-border'
+            )}
+          >
             <div className="flex items-center justify-between mb-2">
               <div className="text-sm font-medium text-text flex items-center gap-1.5">
                 <Inbox className="h-4 w-4 text-accent" /> Da assegnare
@@ -294,11 +449,9 @@ export default function AdvancedPlanner({
                   <BubbleChip
                     key={b.id}
                     booking={b}
-                    draggable
-                    onDragStart={() => setDraggingId(b.id)}
-                    onDragEnd={() => setDraggingId(null)}
-                    onTap={() => setPickBooking(pickBooking === b.id ? null : b.id)}
                     picking={pickBooking === b.id}
+                    dragging={drag?.active && drag.bookingId === b.id}
+                    onPointerDown={(e) => onBubblePointerDown(e, b.id)}
                   />
                 ))}
                 {cestoBookings.length === 0 && (
@@ -307,10 +460,12 @@ export default function AdvancedPlanner({
                   </div>
                 )}
 
-                {/* Menu mobile: assegna a colonna */}
-                {pickBooking && columns.length > 0 && (
+                {/* Menu tap-to-assign */}
+                {pickBooking && columns.length > 0 && assignedIds.has(pickBooking) === false && (
                   <div className="mt-2 p-2 rounded bg-bg-elevated border border-border">
-                    <div className="text-[10px] text-text-muted mb-1.5">Assegna a:</div>
+                    <div className="text-[10px] text-text-muted mb-1.5">
+                      Assegna {bookingById[pickBooking]?.first_name} a:
+                    </div>
                     <div className="flex flex-wrap gap-1">
                       {columns.map((c) => {
                         const boat = boats.find((bo) => bo.id === c.boatId);
@@ -331,7 +486,7 @@ export default function AdvancedPlanner({
             )}
           </div>
 
-          {/* COLONNE barche */}
+          {/* COLONNE */}
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
             {columns.length === 0 ? (
               <div className="col-span-full rounded-lg border border-dashed border-border p-8 text-center text-sm text-text-dim">
@@ -343,17 +498,18 @@ export default function AdvancedPlanner({
                 const count = col.bookingIds.length;
                 const cap = boat?.capacity || null;
                 const over = cap !== null && count > cap;
+                const isHover = drag?.active && drag.hoverDropId === col.boatId;
                 return (
                   <div
                     key={col.boatId}
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={() => { if (draggingId) assignBooking(draggingId, col.boatId); }}
+                    data-drop-id={col.boatId}
                     className={cn(
-                      'rounded-lg border bg-bg-surface flex flex-col',
-                      draggingId ? 'border-accent border-dashed' : 'border-border'
+                      'rounded-lg border bg-bg-surface flex flex-col transition-colors',
+                      isHover ? 'border-accent bg-accent/5'
+                        : drag?.active ? 'border-dashed border-accent/40'
+                        : 'border-border'
                     )}
                   >
-                    {/* Header colonna */}
                     <div className="p-2.5 border-b border-border">
                       <div className="flex items-center justify-between gap-2">
                         <div className="font-medium text-sm flex items-center gap-1.5">
@@ -377,7 +533,6 @@ export default function AdvancedPlanner({
                         </div>
                       )}
 
-                      {/* Istruttori */}
                       <InstructorPicker
                         instructors={instructors}
                         selectedIds={col.instructorIds}
@@ -385,11 +540,10 @@ export default function AdvancedPlanner({
                       />
                     </div>
 
-                    {/* Bolle assegnate */}
                     <div className="p-2 space-y-1.5 flex-1 min-h-[80px]">
                       {col.bookingIds.length === 0 ? (
                         <div className="text-[10px] text-text-dim text-center py-4">
-                          Trascina qui i prenotati
+                          Trascina o tocca un prenotato per assegnarlo
                         </div>
                       ) : (
                         col.bookingIds.map((bid) => {
@@ -400,7 +554,9 @@ export default function AdvancedPlanner({
                               key={bid}
                               booking={b}
                               inColumn
-                              onRemove={() => removeFromColumn(bid)}
+                              dragging={drag?.active && drag.bookingId === bid}
+                              onPointerDown={(e) => onBubblePointerDown(e, bid)}
+                              onRemove={() => removeFromColumns(bid)}
                             />
                           );
                         })
@@ -414,7 +570,6 @@ export default function AdvancedPlanner({
         </div>
       )}
 
-      {/* Avviso non assegnati */}
       {columns.length > 0 && unassignedCount > 0 && (
         <div className="p-3 rounded border border-amber-500/30 bg-amber-500/5 text-sm text-amber-400 flex items-center gap-2">
           <AlertTriangle className="h-4 w-4 shrink-0" />
@@ -426,32 +581,27 @@ export default function AdvancedPlanner({
 }
 
 // ============================================================================
-// Bolla prenotato
+// Bolla prenotato — pointer-based, touch-action none per drag su mobile
 // ============================================================================
 function BubbleChip({
-  booking: b, draggable, inColumn, picking,
-  onDragStart, onDragEnd, onTap, onRemove,
+  booking: b, inColumn, picking, dragging,
+  onPointerDown, onRemove,
 }: {
   booking: BookingWithMember;
-  draggable?: boolean;
   inColumn?: boolean;
   picking?: boolean;
-  onDragStart?: () => void;
-  onDragEnd?: () => void;
-  onTap?: () => void;
+  dragging?: boolean;
+  onPointerDown?: (e: React.PointerEvent) => void;
   onRemove?: () => void;
 }) {
   return (
     <div
-      draggable={draggable}
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
-      onClick={onTap}
+      onPointerDown={onPointerDown}
+      style={{ touchAction: 'none' }}
       className={cn(
-        'px-2.5 py-1.5 rounded-lg border text-sm flex items-center justify-between gap-2 select-none',
+        'px-2.5 py-1.5 rounded-lg border text-sm flex items-center justify-between gap-2 select-none cursor-grab active:cursor-grabbing',
         picking ? 'border-accent bg-accent/10' : 'border-border bg-bg-elevated',
-        draggable && 'cursor-grab active:cursor-grabbing',
-        onTap && 'cursor-pointer'
+        dragging && 'opacity-40'
       )}
     >
       <div className="min-w-0">
@@ -467,6 +617,7 @@ function BubbleChip({
       </div>
       {inColumn && onRemove && (
         <button
+          onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => { e.stopPropagation(); onRemove(); }}
           className="p-0.5 rounded hover:bg-red-500/10 text-text-dim hover:text-red-400 shrink-0"
         >
