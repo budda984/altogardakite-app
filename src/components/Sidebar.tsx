@@ -7,6 +7,7 @@ import {
   UserCog, Anchor, Settings, Tag, BarChart3, LogOut, Shield, CalendarDays,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import ThemeToggle from '@/components/ThemeToggle';
 
 const MAIN_NAV = [
   { href: '/', label: 'Dashboard', icon: Home },
@@ -129,6 +130,7 @@ export function Sidebar({ isAdmin = false, pendingCount = 0 }: SidebarProps) {
           icon={Settings}
           active={isActive('/configurazione')}
         />
+        <ThemeToggle />
         <form action="/api/auth/logout" method="post">
           <button
             type="submit"

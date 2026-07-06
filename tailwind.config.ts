@@ -9,26 +9,26 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Brand AGK
+        // Brand AGK - guidati da variabili CSS (tema scuro/chiaro)
         bg: {
-          DEFAULT: "#0a0a0a",
-          surface: "#141414",
-          elevated: "#1c1c1c",
-          input: "#0f0f0f",
+          DEFAULT: "rgb(var(--bg) / <alpha-value>)",
+          surface: "rgb(var(--bg-surface) / <alpha-value>)",
+          elevated: "rgb(var(--bg-elevated) / <alpha-value>)",
+          input: "rgb(var(--bg-input) / <alpha-value>)",
         },
         border: {
-          DEFAULT: "#262626",
-          strong: "#3a3a3a",
+          DEFAULT: "rgb(var(--border) / <alpha-value>)",
+          strong: "rgb(var(--border-strong) / <alpha-value>)",
         },
         text: {
-          DEFAULT: "#f5f5f5",
-          muted: "#a3a3a3",
-          dim: "#737373",
+          DEFAULT: "rgb(var(--text) / <alpha-value>)",
+          muted: "rgb(var(--text-muted) / <alpha-value>)",
+          dim: "rgb(var(--text-dim) / <alpha-value>)",
         },
         accent: {
-          DEFAULT: "#5dceaa",
-          hover: "#4dbf99",
-          dim: "#3d8c75",
+          DEFAULT: "rgb(var(--accent) / <alpha-value>)",
+          hover: "rgb(var(--accent-hover) / <alpha-value>)",
+          dim: "rgb(var(--accent-dim) / <alpha-value>)",
         },
         danger: "#ef4444",
         warning: "#f59e0b",

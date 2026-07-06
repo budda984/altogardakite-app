@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { Sidebar, MobileNav } from '@/components/Sidebar';
+import MobileThemeToggle from '@/components/MobileThemeToggle';
 import { getAuth } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 
@@ -29,6 +30,13 @@ export default async function RootLayout({
 
   return (
     <html lang="it">
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('agk-theme');if(t==='light'){document.documentElement.classList.add('light');}}catch(e){}})();`,
+          }}
+        />
+      </head>
       <body>
         <div className="flex min-h-screen">
           <Sidebar isAdmin={auth?.isAdmin || false} pendingCount={pendingCount} />
@@ -37,6 +45,7 @@ export default async function RootLayout({
           </main>
         </div>
         <MobileNav />
+        <MobileThemeToggle />
       </body>
     </html>
   );

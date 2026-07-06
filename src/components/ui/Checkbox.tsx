@@ -22,7 +22,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
             )}
             {...props}
           />
-          <span className="text-sm text-text leading-snug select-none group-hover:text-white transition-colors">
+          <span className="text-sm text-text leading-snug select-none group-hover:text-accent transition-colors">
             {label}
           </span>
         </label>
