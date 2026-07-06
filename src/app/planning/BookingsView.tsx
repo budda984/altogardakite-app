@@ -5,7 +5,7 @@ import {
   Plus, Loader2, Trash2, Anchor, Wind, Sparkles, AlertTriangle,
   Users, Sailboat, ChevronRight, GraduationCap, Heart,
   MessageCircle, Send, Phone, Check, Zap, ExternalLink,
-  Clock, ArrowUp,
+  Clock, ArrowUp, CalendarPlus,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/Button';
@@ -14,7 +14,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { cn } from '@/lib/utils';
 import { buildWhatsappLink, normalizePhone } from '@/lib/whatsapp';
 import type {
-  Boat, Instructor, Member, SessionTemplate, BookingWithMember,
+  Boat, Instructor, Member, SessionTemplate, BookingWithMember, ParticipationType,
 } from '@/lib/types';
 import { DISCIPLINE_LABELS, MEMBER_TYPE_LABELS, PARTICIPATION_LABELS } from '@/lib/types';
 import AddBookingModal from './AddBookingModal';
@@ -50,6 +50,8 @@ export default function BookingsView({
     template: SessionTemplate;
     bookings: BookingWithMember[];
   } | null>(null);
+
+  const [showMulti, setShowMulti] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -145,6 +147,12 @@ export default function BookingsView({
 
   return (
     <div className="space-y-6">
+      <div className="flex justify-end">
+        <Button size="sm" variant="secondary" onClick={() => setShowMulti(true)}>
+          <CalendarPlus className="h-3.5 w-3.5 mr-1.5" />
+          Prenotazione multipla
+        </Button>
+      </div>
       {visibleTemplates.map((template) => {
         const slotBookings = bookingsByTemplate.get(template.id) || [];
         return (
@@ -196,6 +204,17 @@ export default function BookingsView({
           date={date}
           template={notifyFor.template}
           bookings={notifyFor.bookings}
+        />
+      )}
+
+      {showMulti && (
+        <MultiBookingModal
+          open={true}
+          onClose={() => setShowMulti(false)}
+          startDate={date}
+          templates={templates}
+          members={members}
+          onSuccess={load}
         />
       )}
     </div>
@@ -646,6 +665,311 @@ function NotifyWhatsappModal({
           <Button variant="ghost" onClick={onClose}>Chiudi</Button>
         </div>
       </div>
+    </Modal>
+  );
+}
+
+// ============================================================================
+// MultiBookingModal - prenotazione multipla: piu soci x piu giorni x piu sessioni
+// ============================================================================
+function MultiBookingModal({
+  open, onClose, startDate, templates, members, onSuccess,
+}: {
+  open: boolean;
+  onClose: () => void;
+  startDate: string;
+  templates: SessionTemplate[];
+  members: Pick<Member, 'id' | 'first_name' | 'last_name' | 'membership_number'>[];
+  onSuccess: () => void;
+}) {
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [selectedMembers, setSelectedMembers] = useState<Set<string>>(new Set());
+  const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set());
+  const [selectedTemplates, setSelectedTemplates] = useState<Set<string>>(new Set());
+  const [participationType, setParticipationType] = useState<ParticipationType>('lift_semplice');
+  const [search, setSearch] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [result, setResult] = useState<{ created: number; skipped_count: number; skipped: string[] } | null>(null);
+
+  // Calendario: mese visualizzato
+  const [calMonth, setCalMonth] = useState(() => {
+    const d = new Date(startDate + 'T12:00:00');
+    return { year: d.getFullYear(), month: d.getMonth() };
+  });
+
+  const filteredMembers = members
+    .filter((m) => {
+      const q = search.toLowerCase().trim();
+      if (!q) return true;
+      return `${m.first_name} ${m.last_name}`.toLowerCase().includes(q) || String(m.membership_number).includes(q);
+    })
+    .slice(0, 40);
+
+  function toggleMember(id: string) {
+    setSelectedMembers((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  }
+  function toggleDate(d: string) {
+    setSelectedDates((prev) => {
+      const n = new Set(prev);
+      if (n.has(d)) n.delete(d); else n.add(d);
+      return n;
+    });
+  }
+  function toggleTemplate(id: string) {
+    setSelectedTemplates((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  }
+
+  // Costruisci griglia calendario
+  const calDays = (() => {
+    const first = new Date(calMonth.year, calMonth.month, 1);
+    const startWeekday = (first.getDay() + 6) % 7; // lun=0
+    const daysInMonth = new Date(calMonth.year, calMonth.month + 1, 0).getDate();
+    const cells: (string | null)[] = [];
+    for (let i = 0; i < startWeekday; i++) cells.push(null);
+    for (let d = 1; d <= daysInMonth; d++) {
+      const mm = String(calMonth.month + 1).padStart(2, '0');
+      const dd = String(d).padStart(2, '0');
+      cells.push(`${calMonth.year}-${mm}-${dd}`);
+    }
+    return cells;
+  })();
+
+  const totalCount = selectedMembers.size * selectedDates.size * selectedTemplates.size;
+
+  async function submit() {
+    setSubmitting(true);
+    setResult(null);
+    try {
+      const res = await fetch('/api/bookings/multipla', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          member_ids: [...selectedMembers],
+          dates: [...selectedDates],
+          session_template_ids: [...selectedTemplates],
+          participation_type: participationType,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Errore');
+      setResult(data);
+      if (data.created > 0) onSuccess();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Errore');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const monthLabel = new Date(calMonth.year, calMonth.month, 1)
+    .toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
+
+  return (
+    <Modal open={open} onClose={onClose} title="Prenotazione multipla" size="lg">
+      {result ? (
+        <div className="space-y-4">
+          <div className="p-4 rounded border border-emerald-500/30 bg-emerald-500/5 text-emerald-400">
+            <div className="text-lg font-display font-bold">{result.created} prenotazioni create</div>
+          </div>
+          {result.skipped_count > 0 && (
+            <div className="p-3 rounded border border-amber-500/30 bg-amber-500/5">
+              <div className="text-sm text-amber-400 mb-1.5">
+                {result.skipped_count} saltate (gia prenotate):
+              </div>
+              <div className="text-xs text-text-muted max-h-40 overflow-y-auto space-y-0.5">
+                {result.skipped.map((s, i) => <div key={i}>{s}</div>)}
+              </div>
+            </div>
+          )}
+          <div className="flex justify-end">
+            <Button onClick={onClose}>Chiudi</Button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {/* Step indicator */}
+          <div className="flex items-center gap-2 text-xs">
+            {[1, 2, 3].map((s) => (
+              <div key={s} className={cn(
+                'flex items-center gap-1',
+                step === s ? 'text-accent font-medium' : 'text-text-dim'
+              )}>
+                <span className={cn(
+                  'h-5 w-5 rounded-full flex items-center justify-center text-[10px]',
+                  step === s ? 'bg-accent text-bg' : 'bg-bg-elevated'
+                )}>{s}</span>
+                {s === 1 ? 'Soci' : s === 2 ? 'Giorni' : 'Sessioni'}
+              </div>
+            ))}
+          </div>
+
+          {/* STEP 1: SOCI */}
+          {step === 1 && (
+            <div className="space-y-3">
+              <div className="text-sm text-text-muted">
+                Scegli uno o piu soci ({selectedMembers.size} selezionati)
+              </div>
+              <input
+                type="text"
+                placeholder="Cerca per nome o tessera"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full bg-bg-elevated border border-border rounded px-3 py-2 text-sm text-text focus:outline-none focus:ring-2 focus:ring-accent/50"
+              />
+              <div className="max-h-64 overflow-y-auto space-y-1 border border-border rounded p-1.5">
+                {filteredMembers.map((m) => {
+                  const on = selectedMembers.has(m.id);
+                  return (
+                    <button
+                      key={m.id}
+                      onClick={() => toggleMember(m.id)}
+                      className={cn(
+                        'w-full flex items-center gap-2 px-2 py-1.5 rounded text-left text-sm',
+                        on ? 'bg-accent/10 text-accent' : 'hover:bg-bg-elevated text-text'
+                      )}
+                    >
+                      <span className={cn('h-4 w-4 rounded border flex items-center justify-center shrink-0', on ? 'border-accent bg-accent/20' : 'border-border')}>
+                        {on && <Check className="h-3 w-3" />}
+                      </span>
+                      {m.first_name} {m.last_name}
+                      <span className="text-[10px] text-text-dim ml-auto">#{m.membership_number}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* STEP 2: GIORNI (calendario) */}
+          {step === 2 && (
+            <div className="space-y-3">
+              <div className="text-sm text-text-muted">
+                Tocca i giorni ({selectedDates.size} selezionati)
+              </div>
+              <div className="flex items-center justify-between">
+                <button
+                  onClick={() => setCalMonth((c) => c.month === 0 ? { year: c.year - 1, month: 11 } : { year: c.year, month: c.month - 1 })}
+                  className="p-1.5 rounded hover:bg-bg-elevated text-text-muted"
+                >
+                  <ChevronRight className="h-4 w-4 rotate-180" />
+                </button>
+                <span className="text-sm font-medium capitalize">{monthLabel}</span>
+                <button
+                  onClick={() => setCalMonth((c) => c.month === 11 ? { year: c.year + 1, month: 0 } : { year: c.year, month: c.month + 1 })}
+                  className="p-1.5 rounded hover:bg-bg-elevated text-text-muted"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="grid grid-cols-7 gap-1 text-center">
+                {['L', 'M', 'M', 'G', 'V', 'S', 'D'].map((d, i) => (
+                  <div key={i} className="text-[10px] text-text-dim py-1">{d}</div>
+                ))}
+                {calDays.map((d, i) => {
+                  if (!d) return <div key={i} />;
+                  const on = selectedDates.has(d);
+                  const dayNum = parseInt(d.slice(-2), 10);
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => toggleDate(d)}
+                      className={cn(
+                        'aspect-square rounded text-sm flex items-center justify-center',
+                        on ? 'bg-accent text-bg font-semibold' : 'hover:bg-bg-elevated text-text'
+                      )}
+                    >
+                      {dayNum}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* STEP 3: SESSIONI + tipo */}
+          {step === 3 && (
+            <div className="space-y-3">
+              <div className="text-sm text-text-muted">
+                Scegli le sessioni ({selectedTemplates.size} selezionate)
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {templates.map((t) => {
+                  const on = selectedTemplates.has(t.id);
+                  return (
+                    <button
+                      key={t.id}
+                      onClick={() => toggleTemplate(t.id)}
+                      className={cn(
+                        'p-2.5 rounded border text-left text-sm',
+                        on ? 'border-accent bg-accent/10 text-accent' : 'border-border bg-bg-surface text-text-muted'
+                      )}
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <span className={cn('h-4 w-4 rounded border flex items-center justify-center shrink-0', on ? 'border-accent bg-accent/20' : 'border-border')}>
+                          {on && <Check className="h-3 w-3" />}
+                        </span>
+                        {t.name}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div>
+                <label className="text-xs text-text-muted">Tipo partecipazione</label>
+                <select
+                  value={participationType}
+                  onChange={(e) => setParticipationType(e.target.value as ParticipationType)}
+                  className="w-full mt-1 bg-bg-elevated border border-border rounded px-3 py-2 text-sm text-text"
+                  style={{ colorScheme: 'dark' }}
+                >
+                  <option value="lift_semplice">Lift semplice</option>
+                  <option value="lift_supervisionato">Lift assistito</option>
+                  <option value="corso">Corso</option>
+                </select>
+              </div>
+
+              {totalCount > 0 && (
+                <div className="p-3 rounded bg-bg-elevated border border-border text-sm">
+                  Stai per creare fino a <strong className="text-accent">{totalCount}</strong> prenotazioni
+                  <div className="text-[11px] text-text-dim mt-0.5">
+                    {selectedMembers.size} soci × {selectedDates.size} giorni × {selectedTemplates.size} sessioni
+                    <br />Le combinazioni gia prenotate verranno saltate.
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Navigazione step */}
+          <div className="flex justify-between gap-3 pt-2 border-t border-border">
+            <Button variant="ghost" onClick={step === 1 ? onClose : () => setStep((s) => (s - 1) as 1 | 2 | 3)}>
+              {step === 1 ? 'Annulla' : 'Indietro'}
+            </Button>
+            {step < 3 ? (
+              <Button
+                onClick={() => setStep((s) => (s + 1) as 1 | 2 | 3)}
+                disabled={(step === 1 && selectedMembers.size === 0) || (step === 2 && selectedDates.size === 0)}
+              >
+                Avanti
+              </Button>
+            ) : (
+              <Button onClick={submit} disabled={submitting || totalCount === 0}>
+                {submitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <CalendarPlus className="h-4 w-4 mr-2" />}
+                Crea prenotazioni
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
     </Modal>
   );
 }
