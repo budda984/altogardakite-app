@@ -567,4 +567,5 @@ export interface BookingWithMember extends Booking {
   template_wind_session: string | null;
   default_departure_time: string;
   default_return_time: string;
+  created_by_name: string | null;
 }

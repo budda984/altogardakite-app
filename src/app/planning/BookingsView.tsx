@@ -384,6 +384,13 @@ function BookingCard({
             </span>
           )}
         </div>
+        {(booking.created_by_name || booking.created_at) && (
+          <div className="text-[9px] text-text-dim mt-1">
+            Inserito
+            {booking.created_by_name && ` da ${booking.created_by_name}`}
+            {booking.created_at && ` il ${new Date(booking.created_at).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: '2-digit' })}`}
+          </div>
+        )}
       </div>
       <button
         onClick={onToggleWaitlist}
