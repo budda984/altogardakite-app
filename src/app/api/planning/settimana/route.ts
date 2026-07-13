@@ -52,11 +52,21 @@ export async function GET(request: NextRequest) {
       .lte('outing_date', end)
       .order('departure_time', { ascending: true, nullsFirst: false });
 
+    const absencesPromise = supabase
+      .from('instructor_absences')
+      .select(`
+        id, instructor_id, absence_date, session_template_id, notes,
+        instructor:instructors(id, first_name, last_name)
+      `)
+      .gte('absence_date', start)
+      .lte('absence_date', end);
+
     const [
       { data: templates },
       { data: bookings, error: bookingsErr },
       { data: outings, error: outingsErr },
-    ] = await Promise.all([templatesPromise, bookingsPromise, outingsPromise]);
+      { data: absences },
+    ] = await Promise.all([templatesPromise, bookingsPromise, outingsPromise, absencesPromise]);
 
     if (bookingsErr) {
       return NextResponse.json({ error: bookingsErr.message }, { status: 500 });
@@ -71,6 +81,7 @@ export async function GET(request: NextRequest) {
       templates: templates || [],
       bookings: bookings || [],
       outings: outings || [],
+      absences: absences || [],
     });
   } catch (e) {
     return NextResponse.json(

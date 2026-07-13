@@ -2,11 +2,19 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import {
-  ChevronLeft, ChevronRight, Loader2, Users, Sailboat, CalendarDays,
+  ChevronLeft, ChevronRight, Loader2, Users, Sailboat, CalendarDays, UserX,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
 import type { SessionTemplate, BookingWithMember } from '@/lib/types';
+
+interface WeekAbsence {
+  id: string;
+  instructor_id: string;
+  absence_date: string;
+  session_template_id: string | null;
+  instructor: { id: string; first_name: string; last_name: string } | null;
+}
 
 interface WeekOuting {
   id: string;
@@ -55,6 +63,7 @@ export default function WeekView({ initialStart, onOpenDay }: Props) {
   const [templates, setTemplates] = useState<SessionTemplate[]>([]);
   const [bookings, setBookings] = useState<BookingWithMember[]>([]);
   const [outings, setOutings] = useState<WeekOuting[]>([]);
+  const [absences, setAbsences] = useState<WeekAbsence[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -66,6 +75,7 @@ export default function WeekView({ initialStart, onOpenDay }: Props) {
         setTemplates(data.templates || []);
         setBookings(data.bookings || []);
         setOutings(data.outings || []);
+        setAbsences(data.absences || []);
       }
     } finally {
       setLoading(false);
@@ -86,6 +96,9 @@ export default function WeekView({ initialStart, onOpenDay }: Props) {
   }
   function dayHasActivity(date: string): boolean {
     return bookings.some((b) => b.booking_date === date) || outings.some((o) => o.outing_date === date);
+  }
+  function absencesFor(date: string): WeekAbsence[] {
+    return absences.filter((a) => a.absence_date === date);
   }
 
   const weekRangeLabel = (() => {
@@ -135,30 +148,44 @@ export default function WeekView({ initialStart, onOpenDay }: Props) {
             const dl = dayLabel(date);
             const isToday = date === today;
             const hasActivity = dayHasActivity(date);
+            const dayAbsences = absencesFor(date);
+            const hasAbsences = dayAbsences.length > 0;
             return (
               <div
                 key={date}
                 className={cn(
-                  'rounded-lg border bg-bg-surface overflow-hidden flex flex-col',
-                  isToday ? 'border-accent' : 'border-border'
+                  'rounded-lg border overflow-hidden flex flex-col',
+                  hasAbsences ? 'bg-amber-500/[0.04]' : 'bg-bg-surface',
+                  isToday ? 'border-accent' : hasAbsences ? 'border-amber-500/40' : 'border-border'
                 )}
               >
                 {/* Header giorno - cliccabile per aprire il dettaglio */}
                 <button
                   onClick={() => onOpenDay(date)}
                   className={cn(
-                    'w-full px-3 py-2 text-left border-b border-border transition-colors',
-                    isToday ? 'bg-accent/10' : 'bg-bg-elevated/40 hover:bg-bg-elevated'
+                    'w-full px-3 py-2 text-left border-b transition-colors',
+                    hasAbsences ? 'border-amber-500/30' : 'border-border',
+                    isToday ? 'bg-accent/10'
+                      : hasAbsences ? 'bg-amber-500/10 hover:bg-amber-500/15'
+                      : 'bg-bg-elevated/40 hover:bg-bg-elevated'
                   )}
                 >
                   <div className="flex items-baseline justify-between">
-                    <span className={cn('text-xs font-medium uppercase', isToday ? 'text-accent' : 'text-text-muted')}>
+                    <span className={cn('text-xs font-medium uppercase', isToday ? 'text-accent' : hasAbsences ? 'text-amber-400' : 'text-text-muted')}>
                       {dl.weekday}
                     </span>
                     <span className={cn('text-lg font-display font-bold', isToday ? 'text-accent' : 'text-text')}>
                       {dl.day}
                     </span>
                   </div>
+                  {hasAbsences && (
+                    <div className="flex items-start gap-1 mt-1 text-[10px] text-amber-400 leading-tight">
+                      <UserX className="h-3 w-3 mt-px shrink-0" />
+                      <span>
+                        {dayAbsences.map((a) => a.instructor?.first_name || '?').join(', ')}
+                      </span>
+                    </div>
+                  )}
                 </button>
 
                 {/* Contenuto giorno */}
