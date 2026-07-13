@@ -5,7 +5,7 @@ import {
   Plus, Loader2, Trash2, Anchor, Wind, Sparkles, AlertTriangle,
   Users, Sailboat, ChevronRight, GraduationCap, Heart,
   MessageCircle, Send, Phone, Check, Zap, ExternalLink,
-  Clock, ArrowUp, CalendarPlus,
+  Clock, ArrowUp, CalendarPlus, UserX,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/Button';
@@ -19,6 +19,15 @@ import type {
 import { DISCIPLINE_LABELS, MEMBER_TYPE_LABELS, PARTICIPATION_LABELS } from '@/lib/types';
 import AddBookingModal from './AddBookingModal';
 import CreateOutingFromBookingsModal from './CreateOutingFromBookingsModal';
+
+interface InstructorAbsence {
+  id: string;
+  instructor_id: string;
+  absence_date: string;
+  session_template_id: string | null;
+  notes: string | null;
+  instructor: { id: string; first_name: string; last_name: string } | null;
+}
 
 interface Props {
   date: string;
@@ -52,15 +61,24 @@ export default function BookingsView({
   } | null>(null);
 
   const [showMulti, setShowMulti] = useState(false);
+  const [showAbsences, setShowAbsences] = useState(false);
+  const [absences, setAbsences] = useState<InstructorAbsence[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/bookings?date=${date}`);
+      const [res, absRes] = await Promise.all([
+        fetch(`/api/bookings?date=${date}`),
+        fetch(`/api/planning/assenze?date=${date}`),
+      ]);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Errore');
       setBookings(data.bookings || []);
+      if (absRes.ok) {
+        const absData = await absRes.json();
+        setAbsences(absData.absences || []);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Errore');
     } finally {
@@ -147,7 +165,16 @@ export default function BookingsView({
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        <Button size="sm" variant="secondary" onClick={() => setShowAbsences(true)}>
+          <UserX className="h-3.5 w-3.5 mr-1.5" />
+          Assenze
+          {absences.length > 0 && (
+            <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400">
+              {absences.length}
+            </span>
+          )}
+        </Button>
         <Button size="sm" variant="secondary" onClick={() => setShowMulti(true)}>
           <CalendarPlus className="h-3.5 w-3.5 mr-1.5" />
           Prenotazione multipla
@@ -165,6 +192,7 @@ export default function BookingsView({
             onDeleteBooking={handleDeleteBooking}
             onNotify={() => setNotifyFor({ template, bookings: slotBookings.filter((b) => !b.is_waitlist) })}
             onToggleWaitlist={handleToggleWaitlist}
+            absences={absences.filter((a) => a.session_template_id === template.id || a.session_template_id === null)}
           />
         );
       })}
@@ -217,6 +245,18 @@ export default function BookingsView({
           onSuccess={load}
         />
       )}
+
+      {showAbsences && (
+        <AbsencesModal
+          open={true}
+          onClose={() => setShowAbsences(false)}
+          date={date}
+          templates={templates}
+          instructors={instructors}
+          absences={absences}
+          onChanged={load}
+        />
+      )}
     </div>
   );
 }
@@ -225,7 +265,7 @@ export default function BookingsView({
 // SlotBlock - una sessione (Peler / Ora / Ora late ecc.)
 // ============================================================================
 function SlotBlock({
-  template, bookings, onAddBooking, onCreateOuting, onDeleteBooking, onNotify, onToggleWaitlist,
+  template, bookings, onAddBooking, onCreateOuting, onDeleteBooking, onNotify, onToggleWaitlist, absences,
 }: {
   template: SessionTemplate;
   bookings: BookingWithMember[];
@@ -234,6 +274,7 @@ function SlotBlock({
   onDeleteBooking: (bookingId: string, memberName: string) => void;
   onNotify: () => void;
   onToggleWaitlist: (bookingId: string, toWaitlist: boolean) => void;
+  absences: InstructorAbsence[];
 }) {
   return (
     <div className="bg-bg-surface border border-border rounded-lg overflow-hidden">
@@ -265,6 +306,18 @@ function SlotBlock({
                       (wait > 0 ? ` · ${wait} in attesa` : '');
                   })()}
             </div>
+            {absences.length > 0 && (
+              <div className="flex items-center gap-1.5 text-[11px] text-amber-400 mt-1.5">
+                <UserX className="h-3.5 w-3.5 shrink-0" />
+                <span>
+                  {absences.map((a) => {
+                    const name = a.instructor ? a.instructor.first_name : 'Istruttore';
+                    return a.session_template_id === null ? `${name} (giorno intero)` : name;
+                  }).join(', ')}
+                  {' '}{absences.length > 1 ? 'assenti' : 'assente'}
+                </span>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <Button size="sm" variant="secondary" onClick={onAddBooking}>
@@ -970,6 +1023,168 @@ function MultiBookingModal({
           </div>
         </div>
       )}
+    </Modal>
+  );
+}
+
+// ============================================================================
+// AbsencesModal - segnala/rimuovi assenze istruttori del giorno
+// ============================================================================
+function AbsencesModal({
+  open, onClose, date, templates, instructors, absences, onChanged,
+}: {
+  open: boolean;
+  onClose: () => void;
+  date: string;
+  templates: SessionTemplate[];
+  instructors: Instructor[];
+  absences: InstructorAbsence[];
+  onChanged: () => void;
+}) {
+  const [instructorId, setInstructorId] = useState('');
+  const [templateId, setTemplateId] = useState(''); // '' = giorno intero
+  const [notes, setNotes] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const dateLabel = new Date(date + 'T12:00:00').toLocaleDateString('it-IT', {
+    weekday: 'long', day: 'numeric', month: 'long',
+  });
+
+  async function add() {
+    if (!instructorId) { setErr('Scegli un istruttore'); return; }
+    setSaving(true);
+    setErr(null);
+    try {
+      const res = await fetch('/api/planning/assenze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          instructor_id: instructorId,
+          absence_date: date,
+          session_template_id: templateId || null,
+          notes,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Errore');
+      setInstructorId('');
+      setTemplateId('');
+      setNotes('');
+      onChanged();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Errore');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function remove(id: string) {
+    try {
+      const res = await fetch(`/api/planning/assenze/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || 'Errore');
+      }
+      onChanged();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Errore');
+    }
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} title="Assenze istruttori">
+      <div className="space-y-4">
+        <p className="text-sm text-text-muted capitalize">{dateLabel}</p>
+
+        {/* Assenze esistenti */}
+        {absences.length > 0 ? (
+          <div className="space-y-1.5">
+            {absences.map((a) => {
+              const tpl = templates.find((t) => t.id === a.session_template_id);
+              return (
+                <div
+                  key={a.id}
+                  className="flex items-center justify-between gap-2 p-2.5 rounded border border-amber-500/25 bg-amber-500/5"
+                >
+                  <div className="min-w-0">
+                    <div className="text-sm text-text font-medium">
+                      {a.instructor ? `${a.instructor.first_name} ${a.instructor.last_name}` : 'Istruttore'}
+                    </div>
+                    <div className="text-[11px] text-amber-400">
+                      {tpl ? tpl.name : 'Giorno intero'}
+                      {a.notes && <span className="text-text-dim"> · {a.notes}</span>}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => remove(a.id)}
+                    className="p-1 rounded hover:bg-red-500/10 text-text-dim hover:text-red-400 shrink-0"
+                    title="Rimuovi assenza"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="text-xs text-text-dim">Nessuna assenza segnalata per questo giorno.</p>
+        )}
+
+        {/* Aggiungi */}
+        <div className="pt-3 border-t border-border space-y-3">
+          <div className="text-xs font-medium text-text-muted">Segnala assenza</div>
+
+          <div>
+            <label className="text-xs text-text-muted">Istruttore</label>
+            <select
+              value={instructorId}
+              onChange={(e) => setInstructorId(e.target.value)}
+              className="w-full mt-1 bg-bg-elevated border border-border rounded px-3 py-2 text-sm text-text"
+            >
+              <option value="">Scegli...</option>
+              {instructors.map((i) => (
+                <option key={i.id} value={i.id}>{i.first_name} {i.last_name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="text-xs text-text-muted">Quando</label>
+            <select
+              value={templateId}
+              onChange={(e) => setTemplateId(e.target.value)}
+              className="w-full mt-1 bg-bg-elevated border border-border rounded px-3 py-2 text-sm text-text"
+            >
+              <option value="">Giorno intero</option>
+              {templates.map((t) => (
+                <option key={t.id} value={t.id}>Solo {t.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="text-xs text-text-muted">Note (facoltative)</label>
+            <input
+              type="text"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="es. visita medica"
+              className="w-full mt-1 bg-bg-elevated border border-border rounded px-3 py-2 text-sm text-text"
+            />
+          </div>
+
+          {err && <p className="text-xs text-red-400">{err}</p>}
+
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={onClose}>Chiudi</Button>
+            <Button onClick={add} disabled={saving || !instructorId}>
+              {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <UserX className="h-4 w-4 mr-2" />}
+              Segnala
+            </Button>
+          </div>
+        </div>
+      </div>
     </Modal>
   );
 }
