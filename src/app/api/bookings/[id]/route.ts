@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getAuth } from '@/lib/auth';
+import { logActivity } from '@/lib/activityLog';
 
 /**
  * DELETE /api/bookings/[id] - cancella una prenotazione (solo se pending)
@@ -18,10 +19,10 @@ export async function DELETE(
 
     const supabase = await createClient();
 
-    // Verifica stato
+    // Verifica stato (e recupera dettagli per il log)
     const { data: booking, error: getErr } = await supabase
-      .from('bookings')
-      .select('status')
+      .from('bookings_with_member')
+      .select('status, first_name, last_name, booking_date, template_name')
       .eq('id', bookingId)
       .single();
     if (getErr || !booking) {
@@ -38,6 +39,11 @@ export async function DELETE(
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+
+    await logActivity(supabase, auth, 'booking.delete',
+      `Prenotazione cancellata: ${booking.first_name} ${booking.last_name} — ${booking.template_name} del ${booking.booking_date}`,
+      { booking_id: bookingId });
+
     return NextResponse.json({ ok: true });
   } catch (e) {
     return NextResponse.json(
@@ -70,8 +76,8 @@ export async function PATCH(
     const supabase = await createClient();
 
     const { data: booking } = await supabase
-      .from('bookings')
-      .select('status')
+      .from('bookings_with_member')
+      .select('status, first_name, last_name, booking_date, template_name')
       .eq('id', bookingId)
       .single();
     if (!booking) {
@@ -92,6 +98,11 @@ export async function PATCH(
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+
+    await logActivity(supabase, auth, 'booking.waitlist',
+      `${booking.first_name} ${booking.last_name} ${body.is_waitlist ? 'messo in lista d\'attesa' : 'confermato dalla lista d\'attesa'} — ${booking.template_name} del ${booking.booking_date}`,
+      { booking_id: bookingId, is_waitlist: body.is_waitlist });
+
     return NextResponse.json({ ok: true });
   } catch (e) {
     return NextResponse.json(

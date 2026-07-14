@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getAuth } from '@/lib/auth';
+import { logActivity } from '@/lib/activityLog';
 
 export async function POST(
   _request: NextRequest,
@@ -26,6 +27,9 @@ export async function POST(
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+
+    await logActivity(supabase, auth, 'outing.reopen',
+      'Uscita riaperta (lift stornati)', { outing_id: outingId });
 
     return NextResponse.json(result);
   } catch (e) {

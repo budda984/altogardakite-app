@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getAuth } from '@/lib/auth';
+import { logActivity } from '@/lib/activityLog';
 import { memberSchema } from '@/lib/validation/schemas';
 
 export async function POST(request: Request) {
@@ -75,6 +76,10 @@ export async function POST(request: Request) {
         { status: 500 }
       );
     }
+
+    await logActivity(supabase, auth, 'member.create',
+      `Nuovo socio: ${data.first_name.trim()} ${data.last_name.trim()}`,
+      { member_id: member.id });
 
     // Subito dopo la creazione: registra la tessera (rinnovo iniziale)
     // tramite la function renew_membership

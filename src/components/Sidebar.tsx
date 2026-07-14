@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Home, Users, Sailboat, Package, GraduationCap,
-  UserCog, Anchor, Settings, Tag, BarChart3, LogOut, Shield, CalendarDays,
+  UserCog, Anchor, Settings, Tag, BarChart3, LogOut, Shield, CalendarDays, ScrollText,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import ThemeToggle from '@/components/ThemeToggle';
@@ -15,6 +15,7 @@ const MAIN_NAV = [
   { href: '/soci', label: 'Soci', icon: Users },
   { href: '/uscite', label: 'Uscite', icon: Sailboat },
   { href: '/statistiche', label: 'Statistiche', icon: BarChart3 },
+  { href: '/log', label: 'Log', icon: ScrollText },
 ];
 
 const ADMIN_NAV = [
@@ -30,6 +31,7 @@ const MOBILE_NAV = [
   { href: '/planning', label: 'Planning', icon: CalendarDays },
   { href: '/soci', label: 'Soci', icon: Users },
   { href: '/uscite', label: 'Uscite', icon: Sailboat },
+  { href: '/log', label: 'Log', icon: ScrollText },
   { href: '/configurazione', label: 'Admin', icon: Settings },
 ];
 
@@ -153,7 +155,7 @@ export function MobileNav() {
 
   return (
     <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-bg-surface border-t border-border z-40">
-      <div className="grid grid-cols-5">
+      <div className="grid grid-cols-6">
         {MOBILE_NAV.map(({ href, label, icon: Icon }) => {
           const active = href === '/' ? pathname === '/' : pathname.startsWith(href);
           return (

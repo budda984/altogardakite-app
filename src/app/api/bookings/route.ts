@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getAuth } from '@/lib/auth';
+import { logActivity } from '@/lib/activityLog';
 import { createBookingSchema } from '@/lib/validation/booking-schemas';
 
 /**
@@ -127,6 +128,15 @@ export async function POST(request: NextRequest) {
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+
+    // Log attivita (best effort)
+    const { data: logMember } = await supabase
+      .from('members').select('first_name, last_name').eq('id', data.member_id).single();
+    const { data: tpl } = await supabase
+      .from('session_templates').select('name').eq('id', data.session_template_id).single();
+    await logActivity(supabase, auth, 'booking.create',
+      `Prenotazione: ${logMember ? `${logMember.first_name} ${logMember.last_name}` : 'socio'} — ${tpl?.name || 'sessione'} del ${data.booking_date}`,
+      { booking_id: booking.id, member_id: data.member_id, date: data.booking_date });
 
     return NextResponse.json(booking);
   } catch (e) {

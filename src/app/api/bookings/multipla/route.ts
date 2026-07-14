@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getAuth } from '@/lib/auth';
+import { logActivity } from '@/lib/activityLog';
 import { z } from 'zod';
 
 const bulkSchema = z.object({
@@ -95,6 +96,13 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: error.message }, { status: 500 });
       }
       created = count ?? toInsert.length;
+    }
+
+    if (created > 0) {
+      const names = member_ids.map((id) => memberName[id]).filter(Boolean).join(', ');
+      await logActivity(supabase, auth, 'booking.bulk',
+        `Prenotazione multipla: ${created} prenotazioni create per ${names} (${dates.length} giorni, ${session_template_ids.length} sessioni)`,
+        { created, skipped: skipped.length });
     }
 
     return NextResponse.json({

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getAuth } from '@/lib/auth';
+import { logActivity } from '@/lib/activityLog';
 import { findRentalService, findSingleLiftService, RENTAL_TYPE_TO_SLUG } from '@/lib/rental-pricing';
 import type { Service, LiftDiscipline } from '@/lib/types';
 
@@ -56,6 +57,9 @@ export async function POST(
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+
+    await logActivity(supabase, auth, 'outing.close',
+      'Uscita chiusa (lift scalati)', { outing_id: outingId });
 
     return NextResponse.json(result);
   } catch (e) {

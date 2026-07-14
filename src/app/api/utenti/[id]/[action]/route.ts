@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuth } from '@/lib/auth';
+import { logActivity } from '@/lib/activityLog';
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 
 type Action = 'approve' | 'demote' | 'promote' | 'suspend' | 'unsuspend' | 'delete';
@@ -123,6 +124,18 @@ export async function POST(
       break;
     }
   }
+
+  const ACTION_LABELS: Record<Action, string> = {
+    approve: 'approvato',
+    demote: 'declassato a staff',
+    promote: 'promosso ad admin',
+    suspend: 'sospeso',
+    unsuspend: 'riattivato',
+    delete: 'eliminato',
+  };
+  await logActivity(supabase, auth, `user.${action}`,
+    `Utente ${target.display_name || targetId} ${ACTION_LABELS[action as Action]}`,
+    { target_id: targetId });
 
   return NextResponse.json({ ok: true });
 }

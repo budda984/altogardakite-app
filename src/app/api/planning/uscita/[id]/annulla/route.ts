@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getAuth } from '@/lib/auth';
+import { logActivity } from '@/lib/activityLog';
 
 export async function POST(
   request: NextRequest,
@@ -32,6 +33,10 @@ export async function POST(
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+
+    await logActivity(supabase, auth, 'outing.cancel',
+      `Uscita annullata (motivo: ${reason})`, { outing_id: outingId });
+
     return NextResponse.json(result);
   } catch (e) {
     return NextResponse.json(

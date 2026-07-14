@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getAuth } from '@/lib/auth';
+import { logActivity } from '@/lib/activityLog';
 import { createOutingFromBookingsSchema } from '@/lib/validation/booking-schemas';
 
 /**
@@ -45,6 +46,13 @@ export async function POST(request: NextRequest) {
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+
+    // Log attivita
+    const { data: boat } = await supabase
+      .from('boats').select('name').eq('id', data.boat_id).single();
+    await logActivity(supabase, auth, 'outing.create',
+      `Uscita creata (bozza): ${boat?.name || 'barca'} il ${data.outing_date} con ${data.booking_ids.length} partecipanti`,
+      { outing_id: outingId, boat_id: data.boat_id, date: data.outing_date });
 
     return NextResponse.json({
       outing_id: outingId,

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getAuth } from '@/lib/auth';
+import { logActivity } from '@/lib/activityLog';
 import { z } from 'zod';
 
 /**
@@ -93,6 +94,19 @@ export async function POST(request: NextRequest) {
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+
+    const { data: ins } = await supabase
+      .from('instructors').select('first_name, last_name').eq('id', instructor_id).single();
+    let tplName: string | null = null;
+    if (session_template_id) {
+      const { data: tpl } = await supabase
+        .from('session_templates').select('name').eq('id', session_template_id).single();
+      tplName = tpl?.name || null;
+    }
+    await logActivity(supabase, auth, 'absence.create',
+      `Assenza segnalata: ${ins ? `${ins.first_name} ${ins.last_name}` : 'istruttore'} il ${absence_date}${tplName ? ` (${tplName})` : ' (giorno intero)'}`,
+      { instructor_id, date: absence_date });
+
     return NextResponse.json({ ok: true });
   } catch (e) {
     return NextResponse.json(
