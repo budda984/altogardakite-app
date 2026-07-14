@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getAuth } from '@/lib/auth';
 import { planningOutingSchema } from '@/lib/validation/admin-schemas';
+import { logActivity } from '@/lib/activityLog';
 
 export async function POST(request: NextRequest) {
   try {
@@ -53,7 +54,22 @@ export async function POST(request: NextRequest) {
       await supabase.from('outing_instructors').insert(rows);
     }
 
-    return NextResponse.json(outing, { status: 201 });
+    // Genera codice identificativo (dopo aver assegnato gli istruttori)
+    let code: string | null = null;
+    try {
+      const { data: genCode } = await supabase.rpc('agk_genera_codice_uscita', {
+        p_outing_id: outing.id,
+      });
+      code = genCode as string | null;
+    } catch { /* non bloccante */ }
+
+    const { data: boat } = await supabase
+      .from('boats').select('name').eq('id', data.boat_id).single();
+    await logActivity(supabase, auth, 'outing.create',
+      `Uscita creata${code ? ` [${code}]` : ''}: ${boat?.name || 'barca'} il ${data.outing_date}`,
+      { outing_id: outing.id, boat_id: data.boat_id, date: data.outing_date, code });
+
+    return NextResponse.json({ ...outing, code }, { status: 201 });
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : 'Errore server' },

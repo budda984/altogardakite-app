@@ -120,6 +120,9 @@ export default async function OutingsListPage({
                 <div className="hidden md:grid grid-cols-[100px_1.5fr_1fr_1fr_60px_100px_30px] gap-3 px-4 py-2.5 items-center text-sm">
                   <div className="text-xs text-text-muted font-mono">
                     {formatDate(o.outing_date)}
+                    {o.code && (
+                      <div className="text-[9px] text-accent mt-0.5 truncate">{o.code}</div>
+                    )}
                   </div>
                   <div className="min-w-0">
                     <div className="font-medium text-text flex items-center gap-1.5 truncate">
@@ -156,6 +159,9 @@ export default async function OutingsListPage({
                 <div className="md:hidden p-3">
                   <div className="flex items-start justify-between gap-2 mb-1">
                     <div className="min-w-0 flex-1">
+                      {o.code && (
+                        <div className="text-[10px] font-mono text-accent mb-0.5">{o.code}</div>
+                      )}
                       <div className="text-xs text-text-dim font-mono mb-1">
                         {formatDate(o.outing_date)}
                         {o.departure_time && o.return_time && (

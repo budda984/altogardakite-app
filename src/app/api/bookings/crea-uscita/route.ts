@@ -47,16 +47,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    // Genera il codice identificativo (data-barca-istruttore-progressivo)
+    let code: string | null = null;
+    try {
+      const { data: genCode } = await supabase.rpc('agk_genera_codice_uscita', {
+        p_outing_id: outingId,
+      });
+      code = genCode as string | null;
+    } catch {
+      // non bloccante: se fallisce, l'uscita resta senza codice
+    }
+
     // Log attivita
     const { data: boat } = await supabase
       .from('boats').select('name').eq('id', data.boat_id).single();
     await logActivity(supabase, auth, 'outing.create',
-      `Uscita creata (bozza): ${boat?.name || 'barca'} il ${data.outing_date} con ${data.booking_ids.length} partecipanti`,
-      { outing_id: outingId, boat_id: data.boat_id, date: data.outing_date });
+      `Uscita creata${code ? ` [${code}]` : ''} (bozza): ${boat?.name || 'barca'} il ${data.outing_date} con ${data.booking_ids.length} partecipanti`,
+      { outing_id: outingId, boat_id: data.boat_id, date: data.outing_date, code });
 
     return NextResponse.json({
       outing_id: outingId,
       participants_count: data.booking_ids.length,
+      code,
     });
   } catch (e) {
     return NextResponse.json(

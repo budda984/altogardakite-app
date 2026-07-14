@@ -26,6 +26,7 @@ import {
 // ============================================================================
 type Outing = {
   id: string;
+  code: string | null;
   outing_date: string;
   status: 'bozza' | 'chiusa' | 'annullata';
   boat_id: string;
@@ -143,6 +144,11 @@ export default function OutingDetailView({
         <div className="flex items-center gap-3 mb-2 flex-wrap">
           <div className="text-xs uppercase tracking-widest text-text-dim">Uscita barca</div>
           <StatusBadge status={outing.status} />
+          {outing.code && (
+            <span className="text-xs font-mono px-2 py-0.5 rounded bg-accent/10 text-accent border border-accent/20">
+              {outing.code}
+            </span>
+          )}
         </div>
         <h1 className="font-display text-2xl lg:text-3xl font-bold tracking-tightest">
           {outing.boat?.name || 'N/D'} - {formatDate(outing.outing_date)}

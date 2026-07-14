@@ -130,6 +130,7 @@ export interface Course {
 
 export interface Outing {
   id: string;
+  code: string | null;
   outing_date: string;
   boat_id: string;
   departure_time: string | null;
