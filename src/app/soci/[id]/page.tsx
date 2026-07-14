@@ -1,9 +1,10 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Mail, Phone, MapPin, Calendar, CheckCircle2, AlertTriangle, Heart, User as UserIcon, Wind } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, MapPin, Calendar, CheckCircle2, AlertTriangle, Heart, User as UserIcon, Wind, MessageCircle } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { getAuth } from '@/lib/auth';
 import { formatDate, calcAge } from '@/lib/utils';
+import { normalizePhone } from '@/lib/whatsapp';
 import { Card } from '@/components/ui/Card';
 import MemberWalletPanel from '@/components/MemberWalletPanel';
 import MemberActions from '@/components/MemberActions';
@@ -92,6 +93,16 @@ export default async function MemberDetailPage({
           {member.phone && (
             <a href={`tel:${member.phone}`} className="flex items-center gap-1.5 hover:text-accent">
               <Phone className="h-4 w-4" /> {member.phone}
+            </a>
+          )}
+          {member.phone && normalizePhone(member.phone) && (
+            <a
+              href={`https://wa.me/${normalizePhone(member.phone)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 hover:bg-emerald-500/20 transition-colors"
+            >
+              <MessageCircle className="h-4 w-4" /> WhatsApp
             </a>
           )}
         </div>
