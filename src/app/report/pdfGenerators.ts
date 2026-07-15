@@ -828,3 +828,99 @@ export function generateOutingPdf(data: OutingPdfData) {
   addFooter(doc);
   downloadPdf(doc, `uscita_${data.code || data.boatName}_${data.date}.pdf`);
 }
+
+// ============================================================================
+// SESSIONE COMPLETA — tutte le barche di una sessione con i loro partecipanti
+// ============================================================================
+export interface SessionPdfBoat {
+  code: string | null;
+  boatName: string;
+  status: string;
+  departureTime?: string | null;
+  returnTime?: string | null;
+  instructors: string[];
+  participants: {
+    name: string;
+    membershipNumber?: number;
+    participation?: string;
+    rental?: string;
+  }[];
+}
+export interface SessionPdfData {
+  date: string;
+  sessionName: string;
+  boats: SessionPdfBoat[];
+}
+
+export function generateSessionPdf(data: SessionPdfData) {
+  const dateLabel = new Date(data.date + 'T12:00:00').toLocaleDateString('it-IT', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  });
+  const doc = setupDoc(`Sessione ${data.sessionName}`, dateLabel);
+  let y = 46;
+
+  const totalPeople = data.boats.reduce((s, b) => s + b.participants.length, 0);
+  const allInstructors = Array.from(new Set(data.boats.flatMap((b) => b.instructors)));
+
+  doc.setFontSize(10);
+  doc.setTextColor(80, 80, 80);
+  doc.text(
+    `${data.boats.length} ${data.boats.length === 1 ? 'imbarcazione' : 'imbarcazioni'}` +
+    `  ·  ${totalPeople} ${totalPeople === 1 ? 'persona' : 'persone'} in acqua` +
+    (allInstructors.length > 0 ? `  ·  ${allInstructors.length} istruttori` : ''),
+    14, y
+  );
+  y += 8;
+
+  // Una tabella per ogni barca
+  for (const b of data.boats) {
+    if (y > 240) { doc.addPage(); y = 20; }
+
+    // Titolo barca
+    doc.setFontSize(12);
+    doc.setTextColor(0, 0, 0);
+    const orario = b.departureTime && b.returnTime
+      ? `  ${b.departureTime.slice(0, 5)}-${b.returnTime.slice(0, 5)}`
+      : '';
+    doc.text(`${b.boatName} (${b.participants.length})${orario}`, 14, y);
+
+    // Stato a destra
+    doc.setFontSize(8);
+    doc.setTextColor(130, 130, 130);
+    doc.text(STATUS_LABELS[b.status] || b.status, 196, y, { align: 'right' });
+    y += 5;
+
+    // Codice + istruttori
+    const meta: string[] = [];
+    if (b.code) meta.push(b.code);
+    if (b.instructors.length > 0) meta.push(`Istruttori: ${b.instructors.join(', ')}`);
+    if (meta.length > 0) {
+      doc.setFontSize(9);
+      doc.setTextColor(100, 100, 100);
+      doc.text(meta.join('  ·  '), 14, y);
+      y += 5;
+    }
+
+    autoTable(doc, {
+      startY: y,
+      head: [['#', 'Partecipante', 'Tessera', 'Tipo', 'Noleggio']],
+      body: b.participants.length > 0
+        ? b.participants.map((p, i) => [
+            String(i + 1),
+            p.name,
+            p.membershipNumber ? `#${p.membershipNumber}` : '—',
+            p.participation ? (PARTECIPATION_LABELS[p.participation] || p.participation) : '—',
+            p.rental ? (RENTAL_PDF_LABELS[p.rental] || p.rental) : '—',
+          ])
+        : [['—', 'Nessun partecipante', '', '', '']],
+      theme: 'striped',
+      headStyles: { fillColor: [93, 206, 170] },
+      styles: { fontSize: 9 },
+      margin: { left: 14, right: 14 },
+    });
+    y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 9;
+  }
+
+  addFooter(doc);
+  downloadPdf(doc, `sessione_${data.sessionName}_${data.date}.pdf`);
+}

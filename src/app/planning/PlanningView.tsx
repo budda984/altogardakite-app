@@ -25,7 +25,7 @@ import CancelOutingModal from './CancelOutingModal';
 import BookingsView from './BookingsView';
 import WeekView from './WeekView';
 import AdvancedPlanner from './AdvancedPlanner';
-import { generateOutingPdf } from '@/app/report/pdfGenerators';
+import { generateOutingPdf, generateSessionPdf } from '@/app/report/pdfGenerators';
 
 interface OutingParticipant {
   id: string;
@@ -552,6 +552,30 @@ function SessionBlock({
   const allClosed = outings.length > 0 && outings.every((o) => o.status === 'chiusa');
   const someClosed = outings.some((o) => o.status === 'chiusa');
 
+  function printSessionPdf() {
+    if (outings.length === 0) return;
+    generateSessionPdf({
+      date: outings[0].outing_date,
+      sessionName: template.name,
+      boats: outings.map((o) => ({
+        code: o.code,
+        boatName: o.boat?.name || 'N/D',
+        status: o.status,
+        departureTime: o.departure_time,
+        returnTime: o.return_time,
+        instructors: o.outing_instructors
+          .map((oi) => oi.instructor ? `${oi.instructor.first_name} ${oi.instructor.last_name}` : '')
+          .filter(Boolean),
+        participants: o.outing_participants.map((p) => ({
+          name: p.member ? `${p.member.first_name} ${p.member.last_name}` : 'N/D',
+          membershipNumber: p.member?.membership_number,
+          participation: p.participation_type,
+          rental: p.rental_type,
+        })),
+      })),
+    });
+  }
+
   return (
     <div className="bg-bg-surface border border-border rounded-lg overflow-hidden">
       <div className="p-4 border-b border-border flex items-start justify-between gap-3 bg-bg-elevated/30">
@@ -586,10 +610,18 @@ function SessionBlock({
             {totalParticipants > 0 && ` · ${totalParticipants} partecipanti`}
           </div>
         </div>
-        <Button size="sm" variant="secondary" onClick={onAddBoat}>
-          <Plus className="h-3.5 w-3.5 mr-1.5" />
-          Aggiungi barca
-        </Button>
+        <div className="flex items-center gap-2 shrink-0">
+          {outings.length > 0 && (
+            <Button size="sm" variant="secondary" onClick={printSessionPdf}>
+              <FileDown className="h-3.5 w-3.5 mr-1.5" />
+              PDF sessione
+            </Button>
+          )}
+          <Button size="sm" variant="secondary" onClick={onAddBoat}>
+            <Plus className="h-3.5 w-3.5 mr-1.5" />
+            Aggiungi barca
+          </Button>
+        </div>
       </div>
 
       {outings.length === 0 ? (
