@@ -639,3 +639,89 @@ export function generatePlannerPdf(data: PlannerPdfData) {
   addFooter(doc);
   downloadPdf(doc, `piano_${data.sessionName}_${data.date}.pdf`);
 }
+
+// ============================================================================
+// SESSIONE — elenco prenotati di uno slot del planning
+// ============================================================================
+export interface SlotPdfBooking {
+  name: string;
+  discipline?: string;
+  participation?: string;
+  isWaitlist?: boolean;
+}
+export interface SlotPdfData {
+  date: string;
+  sessionName: string;
+  departureTime?: string | null;
+  returnTime?: string | null;
+  bookings: SlotPdfBooking[];
+}
+
+export function generateSlotPdf(data: SlotPdfData) {
+  const dateLabel = new Date(data.date + 'T12:00:00').toLocaleDateString('it-IT', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  });
+  const doc = setupDoc(`Sessione: ${data.sessionName}`, dateLabel);
+  let y = 46;
+
+  const confirmed = data.bookings.filter((b) => !b.isWaitlist);
+  const waiting = data.bookings.filter((b) => b.isWaitlist);
+
+  // Riga orario + conteggio
+  const orario = data.departureTime && data.returnTime
+    ? `${data.departureTime.slice(0, 5)} - ${data.returnTime.slice(0, 5)}`
+    : null;
+  doc.setFontSize(10);
+  doc.setTextColor(80, 80, 80);
+  doc.text(
+    (orario ? `Orario: ${orario}  ·  ` : '') +
+    `${confirmed.length} ${confirmed.length === 1 ? 'partecipante' : 'partecipanti'}` +
+    (waiting.length > 0 ? `  ·  ${waiting.length} in lista d'attesa` : ''),
+    14, y
+  );
+  y += 8;
+
+  // Tabella confermati
+  autoTable(doc, {
+    startY: y,
+    head: [['#', 'Partecipante', 'Disciplina', 'Tipo']],
+    body: confirmed.length > 0
+      ? confirmed.map((b, i) => [
+          String(i + 1),
+          b.name,
+          b.discipline ? (DISCIPLINE_LABELS[b.discipline] || b.discipline) : '—',
+          b.participation ? (PARTECIPATION_LABELS[b.participation] || b.participation) : '—',
+        ])
+      : [['—', 'Nessun prenotato', '', '']],
+    theme: 'striped',
+    headStyles: { fillColor: [93, 206, 170] },
+    styles: { fontSize: 10 },
+    margin: { left: 14, right: 14 },
+  });
+  y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
+
+  // Lista d'attesa
+  if (waiting.length > 0) {
+    if (y > 250) { doc.addPage(); y = 20; }
+    doc.setFontSize(12);
+    doc.setTextColor(180, 100, 0);
+    doc.text(`Lista d'attesa (${waiting.length})`, 14, y);
+    y += 5;
+    autoTable(doc, {
+      startY: y,
+      head: [['Partecipante', 'Disciplina', 'Tipo']],
+      body: waiting.map((b) => [
+        b.name,
+        b.discipline ? (DISCIPLINE_LABELS[b.discipline] || b.discipline) : '—',
+        b.participation ? (PARTECIPATION_LABELS[b.participation] || b.participation) : '—',
+      ]),
+      theme: 'plain',
+      headStyles: { fillColor: [240, 220, 200], textColor: [120, 80, 0] },
+      styles: { fontSize: 9 },
+      margin: { left: 14, right: 14 },
+    });
+  }
+
+  addFooter(doc);
+  downloadPdf(doc, `sessione_${data.sessionName}_${data.date}.pdf`);
+}

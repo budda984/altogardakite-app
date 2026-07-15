@@ -5,7 +5,7 @@ import {
   Plus, Loader2, Trash2, Anchor, Wind, Sparkles, AlertTriangle,
   Users, Sailboat, ChevronRight, GraduationCap, Heart,
   MessageCircle, Send, Phone, Check, Zap, ExternalLink,
-  Clock, ArrowUp, CalendarPlus, UserX,
+  Clock, ArrowUp, CalendarPlus, UserX, FileDown,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/Button';
@@ -13,6 +13,7 @@ import { Modal } from '@/components/Modal';
 import { Textarea } from '@/components/ui/Textarea';
 import { cn } from '@/lib/utils';
 import { buildWhatsappLink, normalizePhone } from '@/lib/whatsapp';
+import { generateSlotPdf } from '@/app/report/pdfGenerators';
 import type {
   Boat, Instructor, Member, SessionTemplate, BookingWithMember, ParticipationType,
 } from '@/lib/types';
@@ -130,6 +131,21 @@ export default function BookingsView({
     }
   };
 
+  const handlePrintSlotPdf = (template: SessionTemplate, slotBookings: BookingWithMember[]) => {
+    generateSlotPdf({
+      date,
+      sessionName: template.name,
+      departureTime: template.default_departure_time,
+      returnTime: template.default_return_time,
+      bookings: slotBookings.map((b) => ({
+        name: `${b.first_name} ${b.last_name}`,
+        discipline: b.preferred_discipline || undefined,
+        participation: b.participation_type || undefined,
+        isWaitlist: b.is_waitlist,
+      })),
+    });
+  };
+
   if (loading) {
     return (
       <div className="p-12 text-center bg-bg-surface border border-border rounded-lg">
@@ -193,6 +209,7 @@ export default function BookingsView({
             onNotify={() => setNotifyFor({ template, bookings: slotBookings.filter((b) => !b.is_waitlist) })}
             onToggleWaitlist={handleToggleWaitlist}
             absences={absences.filter((a) => a.session_template_id === template.id || a.session_template_id === null)}
+            onPrintPdf={() => handlePrintSlotPdf(template, slotBookings)}
           />
         );
       })}
@@ -265,7 +282,7 @@ export default function BookingsView({
 // SlotBlock - una sessione (Peler / Ora / Ora late ecc.)
 // ============================================================================
 function SlotBlock({
-  template, bookings, onAddBooking, onCreateOuting, onDeleteBooking, onNotify, onToggleWaitlist, absences,
+  template, bookings, onAddBooking, onCreateOuting, onDeleteBooking, onNotify, onToggleWaitlist, absences, onPrintPdf,
 }: {
   template: SessionTemplate;
   bookings: BookingWithMember[];
@@ -275,6 +292,7 @@ function SlotBlock({
   onNotify: () => void;
   onToggleWaitlist: (bookingId: string, toWaitlist: boolean) => void;
   absences: InstructorAbsence[];
+  onPrintPdf: () => void;
 }) {
   return (
     <div className="bg-bg-surface border border-border rounded-lg overflow-hidden">
@@ -328,6 +346,12 @@ function SlotBlock({
               <Button size="sm" variant="secondary" onClick={onNotify}>
                 <MessageCircle className="h-3.5 w-3.5 mr-1" />
                 Avvisa
+              </Button>
+            )}
+            {bookings.length > 0 && (
+              <Button size="sm" variant="secondary" onClick={onPrintPdf}>
+                <FileDown className="h-3.5 w-3.5 mr-1" />
+                PDF
               </Button>
             )}
             {bookings.length > 0 && (
