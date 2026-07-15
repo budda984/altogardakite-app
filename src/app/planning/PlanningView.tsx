@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ChevronLeft, ChevronRight, Plus, Loader2, Anchor, Users, Wind,
   Trash2, Settings, CalendarDays, Sparkles, Lock, Unlock, CheckCircle2, AlertCircle,
-  Pencil, XCircle,
+  Pencil, XCircle, FileDown,
 } from 'lucide-react';
 import type {
   Boat, Instructor, Member, Service, SessionTemplate,
@@ -25,12 +25,13 @@ import CancelOutingModal from './CancelOutingModal';
 import BookingsView from './BookingsView';
 import WeekView from './WeekView';
 import AdvancedPlanner from './AdvancedPlanner';
+import { generateOutingPdf } from '@/app/report/pdfGenerators';
 
 interface OutingParticipant {
   id: string;
   participation_type: string;
   rental_type: string;
-  member: { id: string; first_name: string; last_name: string } | null;
+  member: { id: string; first_name: string; last_name: string; membership_number?: number } | null;
 }
 interface OutingInstructor {
   instructor_id: string;
@@ -39,6 +40,7 @@ interface OutingInstructor {
 }
 interface OutingFull {
   id: string;
+  code: string | null;
   outing_date: string;
   boat_id: string;
   session_template_id: string | null;
@@ -667,6 +669,30 @@ function BoatOuting({
   const isCancelled = outing.status === 'annullata';
   const isDraft = outing.status === 'bozza';
 
+  function onPrintPdf() {
+    generateOutingPdf({
+      code: outing.code,
+      date: outing.outing_date,
+      status: outing.status,
+      boatName: outing.boat?.name || 'N/D',
+      discipline: outing.discipline,
+      windSession: outing.wind_session,
+      departureTime: outing.departure_time,
+      returnTime: outing.return_time,
+      instructors: outing.outing_instructors
+        .map((oi) => oi.instructor ? `${oi.instructor.first_name} ${oi.instructor.last_name}` : '')
+        .filter(Boolean),
+      weatherNotes: outing.weather_notes,
+      notes: outing.notes,
+      participants: outing.outing_participants.map((p) => ({
+        name: p.member ? `${p.member.first_name} ${p.member.last_name}` : 'N/D',
+        membershipNumber: p.member?.membership_number,
+        participation: p.participation_type,
+        rental: p.rental_type,
+      })),
+    });
+  }
+
   return (
     <div className={cn(
       'p-4',
@@ -700,6 +726,9 @@ function BoatOuting({
               <span className="text-xs text-text-muted">
                 {outing.departure_time.slice(0, 5)} – {outing.return_time.slice(0, 5)}
               </span>
+            )}
+            {outing.code && (
+              <span className="text-[10px] font-mono text-accent/80">{outing.code}</span>
             )}
             {capacity && !isCancelled && (
               <span className={cn(
@@ -746,6 +775,13 @@ function BoatOuting({
           )}
         </div>
         <div className="flex items-center gap-1 shrink-0">
+          <button
+            onClick={onPrintPdf}
+            className="p-1.5 rounded hover:bg-bg-elevated text-text-muted hover:text-accent"
+            title="Stampa PDF"
+          >
+            <FileDown className="h-3.5 w-3.5" />
+          </button>
           {isDraft && (
             <>
               <Button size="sm" variant="secondary" onClick={onAddParticipant}>
