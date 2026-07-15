@@ -725,3 +725,106 @@ export function generateSlotPdf(data: SlotPdfData) {
   addFooter(doc);
   downloadPdf(doc, `sessione_${data.sessionName}_${data.date}.pdf`);
 }
+
+// ============================================================================
+// USCITA — foglio riassuntivo di una singola uscita barca
+// ============================================================================
+const RENTAL_PDF_LABELS: Record<string, string> = {
+  nessuno: '—', completo: 'Completo', solo_tavola: 'Tavola', solo_kite: 'Kite',
+  solo_barra: 'Barra', solo_trapezio: 'Trapezio', solo_muta: 'Muta',
+  solo_giubbotto: 'Giubbotto',
+};
+
+export interface OutingPdfData {
+  code: string | null;
+  date: string;
+  status: string;
+  boatName: string;
+  discipline?: string | null;
+  windSession?: string | null;
+  departureTime?: string | null;
+  returnTime?: string | null;
+  instructors: string[];
+  weatherNotes?: string | null;
+  notes?: string | null;
+  participants: {
+    name: string;
+    membershipNumber?: number;
+    participation?: string;
+    rental?: string;
+    notes?: string | null;
+  }[];
+}
+
+export function generateOutingPdf(data: OutingPdfData) {
+  const dateLabel = new Date(data.date + 'T12:00:00').toLocaleDateString('it-IT', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  });
+  const doc = setupDoc(`Uscita: ${data.boatName}`, dateLabel);
+  let y = 46;
+
+  // Codice in evidenza
+  if (data.code) {
+    doc.setFontSize(11);
+    doc.setTextColor(40, 40, 40);
+    doc.text(`Codice: ${data.code}`, 14, y);
+    y += 6;
+  }
+
+  // Riepilogo uscita
+  const orario = data.departureTime && data.returnTime
+    ? `${data.departureTime.slice(0, 5)} - ${data.returnTime.slice(0, 5)}`
+    : null;
+  const infoRows: string[][] = [];
+  infoRows.push(['Imbarcazione', data.boatName]);
+  if (orario) infoRows.push(['Orario', orario]);
+  if (data.discipline) {
+    infoRows.push(['Disciplina', DISCIPLINE_LABELS[data.discipline] || data.discipline]);
+  }
+  if (data.windSession) infoRows.push(['Sessione', data.windSession]);
+  infoRows.push(['Stato', STATUS_LABELS[data.status] || data.status]);
+  if (data.instructors.length > 0) {
+    infoRows.push(['Istruttori', data.instructors.join(', ')]);
+  }
+  if (data.weatherNotes) infoRows.push(['Meteo', data.weatherNotes]);
+  if (data.notes) infoRows.push(['Note', data.notes]);
+
+  autoTable(doc, {
+    startY: y,
+    body: infoRows,
+    theme: 'plain',
+    styles: { fontSize: 9, cellPadding: 1.5 },
+    columnStyles: {
+      0: { fontStyle: 'bold', cellWidth: 32, textColor: [100, 100, 100] },
+    },
+    margin: { left: 14, right: 14 },
+  });
+  y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+
+  // Partecipanti
+  doc.setFontSize(12);
+  doc.setTextColor(0, 0, 0);
+  doc.text(`Partecipanti (${data.participants.length})`, 14, y);
+  y += 5;
+
+  autoTable(doc, {
+    startY: y,
+    head: [['#', 'Partecipante', 'Tessera', 'Tipo', 'Noleggio']],
+    body: data.participants.length > 0
+      ? data.participants.map((p, i) => [
+          String(i + 1),
+          p.name,
+          p.membershipNumber ? `#${p.membershipNumber}` : '—',
+          p.participation ? (PARTECIPATION_LABELS[p.participation] || p.participation) : '—',
+          p.rental ? (RENTAL_PDF_LABELS[p.rental] || p.rental) : '—',
+        ])
+      : [['—', 'Nessun partecipante', '', '', '']],
+    theme: 'striped',
+    headStyles: { fillColor: [93, 206, 170] },
+    styles: { fontSize: 10 },
+    margin: { left: 14, right: 14 },
+  });
+
+  addFooter(doc);
+  downloadPdf(doc, `uscita_${data.code || data.boatName}_${data.date}.pdf`);
+}

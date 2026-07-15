@@ -6,7 +6,7 @@ import Link from 'next/link';
 import {
   ArrowLeft, Calendar, Clock, Sailboat, Wind, Users, Package,
   Edit, Save, X, Plus, Trash2, Loader2, Lock, Unlock, XCircle,
-  AlertTriangle, GraduationCap, CheckCircle2,
+  AlertTriangle, GraduationCap, CheckCircle2, FileDown,
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { Modal } from '@/components/Modal';
+import { generateOutingPdf } from '@/app/report/pdfGenerators';
 import { formatDate, formatTime, cn } from '@/lib/utils';
 import {
   WIND_SESSION_LABELS, PARTICIPATION_LABELS, RENTAL_LABELS, EQUIPMENT_LABELS,
@@ -83,6 +84,32 @@ export default function OutingDetailView({
   const availableMembers = allMembers.filter((m) => !currentParticipantIds.has(m.id));
 
   // ============== ACTIONS ==============
+  function printPdf() {
+    generateOutingPdf({
+      code: outing.code,
+      date: outing.outing_date,
+      status: outing.status,
+      boatName: outing.boat?.name || 'N/D',
+      discipline: outing.discipline,
+      windSession: outing.wind_session,
+      departureTime: outing.departure_time,
+      returnTime: outing.return_time,
+      instructors: instructorRows.map((row) => {
+        const inst = Array.isArray(row.instructor) ? row.instructor[0] : row.instructor;
+        return inst ? `${inst.first_name} ${inst.last_name}` : '';
+      }).filter(Boolean),
+      weatherNotes: outing.weather_notes,
+      notes: outing.notes,
+      participants: participants.map((p) => ({
+        name: p.member ? `${p.member.first_name} ${p.member.last_name}` : 'N/D',
+        membershipNumber: p.member?.membership_number,
+        participation: p.participation_type,
+        rental: p.rental_type,
+        notes: p.notes,
+      })),
+    });
+  }
+
   async function reopenOuting() {
     if (!confirm('Riaprire l\'uscita? Gli addebiti verranno stornati e potrai modificare partecipanti, barca, orari ecc.')) return;
     setBusy(true);
@@ -207,6 +234,9 @@ export default function OutingDetailView({
             Solo l&apos;admin puo riaprire un&apos;uscita chiusa
           </span>
         )}
+        <Button size="sm" variant="secondary" onClick={printPdf}>
+          <FileDown className="h-3.5 w-3.5 mr-1.5" /> Stampa PDF
+        </Button>
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
