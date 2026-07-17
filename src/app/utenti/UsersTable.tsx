@@ -20,6 +20,9 @@ const ROLE_COLORS: Record<UserRole, string> = {
   pending: 'bg-amber-500/10 text-amber-400 border-amber-500/30',
   staff: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
   admin: 'bg-accent/10 text-accent border-accent/30',
+  // I soci non usano il gestionale: qui compaiono solo perche' condividono
+  // l'autenticazione. Colore spento, non sono utenti da approvare.
+  socio: 'bg-bg-elevated text-text-muted border-border',
 };
 
 export default function UsersTable({ users, currentUserId }: Props) {

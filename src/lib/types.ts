@@ -336,7 +336,10 @@ export const EQUIPMENT_TRANSACTION_LABELS: Record<EquipmentTransactionType, stri
 // ============================================================================
 // PROFILES (utenti staff con ruoli)
 // ============================================================================
-export type UserRole = 'pending' | 'staff' | 'admin';
+// 'socio' arriva dalla migration 0025: e' chi usa il portale soci, non il
+// gestionale. Qui non entra mai (isStaff resta false), ma il tipo deve dire
+// la verita' su cosa puo' esserci dentro profiles.role.
+export type UserRole = 'pending' | 'staff' | 'admin' | 'socio';
 
 export interface Profile {
   id: string;
@@ -358,6 +361,7 @@ export const USER_ROLE_LABELS: Record<UserRole, string> = {
   pending: 'In attesa',
   staff: 'Staff',
   admin: 'Amministratore',
+  socio: 'Socio (portale)',
 };
 
 // ============================================================================
@@ -569,4 +573,36 @@ export interface BookingWithMember extends Booking {
   default_departure_time: string;
   default_return_time: string;
   created_by_name: string | null;
+}
+
+// Vista bookings_da_rispondere (migration 0028, ampliata dalla 0030).
+// Tutto quello che serve per rispondere a una richiesta in dieci secondi
+// senza aprire la scheda del socio.
+export interface RichiestaDaRispondere {
+  id: string;
+  booking_date: string;
+  created_at: string;
+  notes: string | null;
+  is_waitlist: boolean;
+  preferred_discipline: LiftDiscipline | null;
+  member_id: string;
+  first_name: string;
+  last_name: string;
+  phone: string | null;
+  membership_number: number | null;
+  member_type: MemberType | null;
+  tessera_scade_il: string | null;
+  tessera_scaduta: boolean;
+  certificato_scade_il: string | null;
+  certificato_non_valido: boolean;
+  template_name: string;
+  wind_session: WindSession | null;
+  default_departure_time: string | null;
+  fascia: 'mattina' | 'pomeriggio';
+  lift_residui: number | null;
+  ha_abbonamento: boolean;
+  capienza: number;
+  posti_impegnati: number;
+  posti_liberi: number;
+  altre_richieste_sulla_fascia: number;
 }

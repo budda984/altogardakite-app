@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   Home, Users, Sailboat, Package, GraduationCap,
   UserCog, Anchor, Settings, Tag, BarChart3, LogOut, Shield, CalendarDays, ScrollText,
+  Inbox,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import ThemeToggle from '@/components/ThemeToggle';
@@ -12,6 +13,7 @@ import ThemeToggle from '@/components/ThemeToggle';
 const MAIN_NAV = [
   { href: '/', label: 'Dashboard', icon: Home },
   { href: '/planning', label: 'Planning', icon: CalendarDays },
+  { href: '/richieste', label: 'Richieste', icon: Inbox },
   { href: '/soci', label: 'Soci', icon: Users },
   { href: '/uscite', label: 'Uscite', icon: Sailboat },
   { href: '/statistiche', label: 'Statistiche', icon: BarChart3 },
@@ -29,7 +31,7 @@ const ADMIN_NAV = [
 const MOBILE_NAV = [
   { href: '/', label: 'Home', icon: Home },
   { href: '/planning', label: 'Planning', icon: CalendarDays },
-  { href: '/soci', label: 'Soci', icon: Users },
+  { href: '/richieste', label: 'Richieste', icon: Inbox },
   { href: '/uscite', label: 'Uscite', icon: Sailboat },
   { href: '/log', label: 'Log', icon: ScrollText },
   { href: '/configurazione', label: 'Admin', icon: Settings },
@@ -38,6 +40,7 @@ const MOBILE_NAV = [
 interface SidebarProps {
   isAdmin?: boolean;
   pendingCount?: number;
+  richiesteCount?: number;
 }
 
 function NavLink({
@@ -64,7 +67,7 @@ function NavLink({
   );
 }
 
-export function Sidebar({ isAdmin = false, pendingCount = 0 }: SidebarProps) {
+export function Sidebar({ isAdmin = false, pendingCount = 0, richiesteCount = 0 }: SidebarProps) {
   const pathname = usePathname();
   if (pathname.startsWith('/login') || pathname.startsWith('/registrati') || pathname.startsWith('/attesa')) {
     return null;
@@ -92,7 +95,12 @@ export function Sidebar({ isAdmin = false, pendingCount = 0 }: SidebarProps) {
       <nav className="flex-1 p-4 space-y-6 overflow-y-auto">
         <div className="space-y-1">
           {MAIN_NAV.map((item) => (
-            <NavLink key={item.href} {...item} active={isActive(item.href)} />
+            <NavLink
+              key={item.href}
+              {...item}
+              active={isActive(item.href)}
+              badge={item.href === '/richieste' ? richiesteCount : undefined}
+            />
           ))}
         </div>
 

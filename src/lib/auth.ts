@@ -1,11 +1,11 @@
 import { createClient } from '@/lib/supabase/server';
-import type { Profile } from '@/lib/types';
+import type { Profile, UserRole } from '@/lib/types';
 
 export interface AuthState {
   userId: string;
   email: string | null;
   profile: Profile | null;
-  role: 'pending' | 'staff' | 'admin';
+  role: UserRole;
   isStaff: boolean;
   isAdmin: boolean;
 }
@@ -25,7 +25,7 @@ export async function getAuth(): Promise<AuthState | null> {
     .eq('id', user.id)
     .single();
 
-  const role = (profile?.role || 'pending') as AuthState['role'];
+  const role = (profile?.role || 'pending') as UserRole;
   const suspended = profile?.suspended === true;
   const isStaff = (role === 'staff' || role === 'admin') && !suspended;
   const isAdmin = role === 'admin' && !suspended;

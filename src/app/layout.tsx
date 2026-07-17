@@ -17,6 +17,7 @@ export default async function RootLayout({
 }) {
   const auth = await getAuth();
   let pendingCount = 0;
+  let richiesteCount = 0;
 
   if (auth?.isAdmin) {
     const supabase = await createClient();
@@ -26,6 +27,17 @@ export default async function RootLayout({
       .eq('role', 'pending')
       .eq('suspended', false);
     pendingCount = count || 0;
+  }
+
+  if (auth?.isStaff) {
+    const supabase = await createClient();
+    // head+count: ci serve il numero, non le righe.
+    // Se la vista non c'e' ancora (migration 0028 non applicata) count resta
+    // null e il badge sparisce: il gestionale non deve rompersi per questo.
+    const { count } = await supabase
+      .from('bookings_da_rispondere')
+      .select('*', { count: 'exact', head: true });
+    richiesteCount = count || 0;
   }
 
   return (
@@ -39,7 +51,11 @@ export default async function RootLayout({
       </head>
       <body>
         <div className="flex min-h-screen">
-          <Sidebar isAdmin={auth?.isAdmin || false} pendingCount={pendingCount} />
+          <Sidebar
+            isAdmin={auth?.isAdmin || false}
+            pendingCount={pendingCount}
+            richiesteCount={richiesteCount}
+          />
           <main className="flex-1 pb-20 lg:pb-0">
             {children}
           </main>
