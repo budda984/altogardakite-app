@@ -5,7 +5,7 @@ import {
   Plus, Loader2, Trash2, Anchor, Wind, Sparkles, AlertTriangle,
   Users, Sailboat, ChevronRight, GraduationCap, Heart,
   MessageCircle, Send, Phone, Check, Zap, ExternalLink,
-  Clock, ArrowUp, CalendarPlus, UserX, FileDown,
+  Clock, ArrowUp, CalendarPlus, UserX, FileDown, Bell,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/Button';
@@ -62,6 +62,10 @@ export default function BookingsView({
   } | null>(null);
 
   // Modal: avvisa via WhatsApp
+  const [notificaPortaleFor, setNotificaPortaleFor] = useState<{
+    template: SessionTemplate;
+    destinatari: number;
+  } | null>(null);
   const [notifyFor, setNotifyFor] = useState<{
     template: SessionTemplate;
     bookings: BookingWithMember[];
@@ -214,6 +218,14 @@ export default function BookingsView({
             onCreateOuting={() => setCreateOutingFor({ template, bookings: slotBookings.filter((b) => !b.is_waitlist && !daApprovare(b)) })}
             onDeleteBooking={handleDeleteBooking}
             onNotify={() => setNotifyFor({ template, bookings: slotBookings.filter((b) => !b.is_waitlist && !daApprovare(b)) })}
+            onNotificaPortale={() =>
+              setNotificaPortaleFor({
+                template,
+                // Stessi destinatari della funzione SQL: tutti tranne i
+                // "da approvare" — lista d'attesa inclusa.
+                destinatari: slotBookings.filter((b) => !daApprovare(b)).length,
+              })
+            }
             onToggleWaitlist={handleToggleWaitlist}
             absences={absences.filter((a) => a.session_template_id === template.id || a.session_template_id === null)}
             onPrintPdf={() => handlePrintSlotPdf(template, slotBookings)}
@@ -249,6 +261,15 @@ export default function BookingsView({
         />
       )}
 
+      {notificaPortaleFor && (
+        <NotificaPortaleModal
+          open
+          onClose={() => setNotificaPortaleFor(null)}
+          date={date}
+          template={notificaPortaleFor.template}
+          destinatari={notificaPortaleFor.destinatari}
+        />
+      )}
       {notifyFor && (
         <NotifyWhatsappModal
           open={true}
@@ -289,7 +310,7 @@ export default function BookingsView({
 // SlotBlock - una sessione (Peler / Ora / Ora late ecc.)
 // ============================================================================
 function SlotBlock({
-  template, bookings, onAddBooking, onCreateOuting, onDeleteBooking, onNotify, onToggleWaitlist, absences, onPrintPdf, onReload,
+  template, bookings, onAddBooking, onCreateOuting, onDeleteBooking, onNotify, onNotificaPortale, onToggleWaitlist, absences, onPrintPdf, onReload,
 }: {
   template: SessionTemplate;
   bookings: BookingWithMember[];
@@ -297,6 +318,7 @@ function SlotBlock({
   onCreateOuting: () => void;
   onDeleteBooking: (bookingId: string, memberName: string) => void;
   onNotify: () => void;
+  onNotificaPortale: () => void;
   onToggleWaitlist: (bookingId: string, toWaitlist: boolean) => void;
   absences: InstructorAbsence[];
   onPrintPdf: () => void;
@@ -354,6 +376,12 @@ function SlotBlock({
               <Button size="sm" variant="secondary" onClick={onNotify}>
                 <MessageCircle className="h-3.5 w-3.5 mr-1" />
                 Avvisa
+              </Button>
+            )}
+            {bookings.length > 0 && (
+              <Button size="sm" variant="secondary" onClick={onNotificaPortale}>
+                <Bell className="h-3.5 w-3.5 mr-1" />
+                Portale
               </Button>
             )}
             {bookings.length > 0 && (
@@ -1301,6 +1329,152 @@ function DaApprovareCard({ booking, onDone }: { booking: BookingWithMember; onDo
             ✕
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+
+// Notifica nel PORTALE a tutti i prenotati della sessione. Diversa da
+// "Avvisa" (WhatsApp via OpenWA): questa scrive gli avvisi in-app, gratis
+// e senza numeri di telefono di mezzo. I destinatari li decide la funzione
+// avvisa_sessione(): staff + accettate, lista d'attesa inclusa.
+function NotificaPortaleModal({
+  open, onClose, date, template, destinatari,
+}: {
+  open: boolean;
+  onClose: () => void;
+  date: string;
+  template: SessionTemplate;
+  destinatari: number;
+}) {
+  const dateLabel = new Date(date + 'T12:00:00').toLocaleDateString('it-IT', {
+    weekday: 'long', day: 'numeric', month: 'long',
+  });
+
+  const [tipo, setTipo] = useState<'messaggio' | 'annullamento' | 'promemoria'>('messaggio');
+  const [titolo, setTitolo] = useState('');
+  const [corpo, setCorpo] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [esito, setEsito] = useState<string | null>(null);
+  const [errore, setErrore] = useState<string | null>(null);
+
+  const PRONTI: Record<string, { titolo: string; corpo: string }> = {
+    annullamento: {
+      titolo: 'Uscita annullata',
+      corpo: `La sessione ${template.name} di ${dateLabel} è annullata per condizioni meteo. Non ti viene scalata dal pacchetto.`,
+    },
+    promemoria: {
+      titolo: 'Promemoria uscita',
+      corpo: `Ci vediamo ${dateLabel} per la sessione ${template.name}. Ritrovo al Porto San Nicolò 15 minuti prima.`,
+    },
+    messaggio: { titolo: '', corpo: '' },
+  };
+
+  const scegli = (t: 'messaggio' | 'annullamento' | 'promemoria') => {
+    setTipo(t);
+    setTitolo(PRONTI[t].titolo);
+    setCorpo(PRONTI[t].corpo);
+  };
+
+  const invia = async () => {
+    setBusy(true);
+    setErrore(null);
+    try {
+      const res = await fetch('/api/notifiche-sessione', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date, template_id: template.id, titolo, corpo, tipo }),
+      });
+      const j = await res.json();
+      if (!res.ok) setErrore(j.error || 'Non ha funzionato');
+      else setEsito(`Notifica inviata a ${j.avvisati} soci.`);
+    } catch {
+      setErrore('Non riesco a raggiungere il server');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+      <div
+        className="bg-bg-elevated border border-border rounded-xl w-full max-w-md p-5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="font-display text-lg font-bold">Notifica nel portale</h3>
+        <p className="text-xs text-text-muted mt-1">
+          {template.name} · {dateLabel} · arriverà a <b className="text-text">{destinatari}</b>{' '}
+          {destinatari === 1 ? 'socio' : 'soci'} (lista d&apos;attesa inclusa, richieste non
+          approvate escluse). Solo chi usa il portale la vede.
+        </p>
+
+        {esito ? (
+          <>
+            <div className="mt-4 rounded-md bg-accent/10 text-accent text-sm px-3 py-2.5">{esito}</div>
+            <button
+              onClick={onClose}
+              className="mt-4 w-full px-4 py-2.5 rounded-md bg-accent text-bg text-sm font-semibold"
+            >
+              Chiudi
+            </button>
+          </>
+        ) : (
+          <>
+            <div className="flex gap-1.5 mt-4">
+              {(['messaggio', 'annullamento', 'promemoria'] as const).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => scegli(t)}
+                  className={
+                    'flex-1 px-2 py-1.5 rounded-md border text-xs capitalize ' +
+                    (tipo === t
+                      ? 'border-accent bg-accent/10 text-accent'
+                      : 'border-border text-text-muted hover:text-text')
+                  }
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+
+            <input
+              value={titolo}
+              onChange={(e) => setTitolo(e.target.value)}
+              placeholder="Titolo"
+              className="mt-3 w-full bg-bg-input border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:border-accent"
+            />
+            <textarea
+              value={corpo}
+              onChange={(e) => setCorpo(e.target.value)}
+              rows={4}
+              placeholder="Il messaggio che leggeranno i soci…"
+              className="mt-2 w-full bg-bg-input border border-border rounded-md px-3 py-2 text-sm resize-none focus:outline-none focus:border-accent"
+            />
+
+            {errore && (
+              <div className="mt-2 rounded-md bg-red-500/10 text-red-400 text-xs px-3 py-2">{errore}</div>
+            )}
+
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={onClose}
+                className="flex-1 px-4 py-2.5 rounded-md border border-border text-sm text-text-muted hover:text-text"
+              >
+                Annulla
+              </button>
+              <button
+                onClick={invia}
+                disabled={busy || !titolo.trim() || !corpo.trim() || destinatari === 0}
+                className="flex-1 px-4 py-2.5 rounded-md bg-accent text-bg text-sm font-semibold hover:bg-accent-hover disabled:opacity-50"
+              >
+                {busy ? 'Invio…' : 'Invia la notifica'}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
