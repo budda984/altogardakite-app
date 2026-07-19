@@ -22,6 +22,11 @@ import AddBookingModal from './AddBookingModal';
 import CreateOutingFromBookingsModal from './CreateOutingFromBookingsModal';
 import { oggiItalia } from '@/lib/dataLocale';
 
+// Una richiesta dal portale ancora senza risposta: va approvata prima di
+// essere lavorabile (niente uscite, niente avvisi, niente conteggi).
+const daApprovare = (b: BookingWithMember) =>
+  b.source === 'portale' && !b.accepted_at && !b.refused_at;
+
 interface InstructorAbsence {
   id: string;
   instructor_id: string;
@@ -204,10 +209,11 @@ export default function BookingsView({
             key={template.id}
             template={template}
             bookings={slotBookings}
+            onReload={load}
             onAddBooking={() => setAddBookingFor(template)}
-            onCreateOuting={() => setCreateOutingFor({ template, bookings: slotBookings.filter((b) => !b.is_waitlist) })}
+            onCreateOuting={() => setCreateOutingFor({ template, bookings: slotBookings.filter((b) => !b.is_waitlist && !daApprovare(b)) })}
             onDeleteBooking={handleDeleteBooking}
-            onNotify={() => setNotifyFor({ template, bookings: slotBookings.filter((b) => !b.is_waitlist) })}
+            onNotify={() => setNotifyFor({ template, bookings: slotBookings.filter((b) => !b.is_waitlist && !daApprovare(b)) })}
             onToggleWaitlist={handleToggleWaitlist}
             absences={absences.filter((a) => a.session_template_id === template.id || a.session_template_id === null)}
             onPrintPdf={() => handlePrintSlotPdf(template, slotBookings)}
@@ -283,7 +289,7 @@ export default function BookingsView({
 // SlotBlock - una sessione (Peler / Ora / Ora late ecc.)
 // ============================================================================
 function SlotBlock({
-  template, bookings, onAddBooking, onCreateOuting, onDeleteBooking, onNotify, onToggleWaitlist, absences, onPrintPdf,
+  template, bookings, onAddBooking, onCreateOuting, onDeleteBooking, onNotify, onToggleWaitlist, absences, onPrintPdf, onReload,
 }: {
   template: SessionTemplate;
   bookings: BookingWithMember[];
@@ -294,6 +300,7 @@ function SlotBlock({
   onToggleWaitlist: (bookingId: string, toWaitlist: boolean) => void;
   absences: InstructorAbsence[];
   onPrintPdf: () => void;
+  onReload: () => void;
 }) {
   return (
     <div className="bg-bg-surface border border-border rounded-lg overflow-hidden">
@@ -372,9 +379,29 @@ function SlotBlock({
           </div>
         ) : (
           <>
+            {/* Da approvare: richieste dal portale senza ancora un si'/no.
+                Sezione a parte, come la lista d'attesa: non si mescolano
+                con le prenotazioni decise. */}
+            {bookings.some(daApprovare) && (
+              <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3">
+                <div className="flex items-center gap-1.5 text-xs font-medium text-amber-400 mb-2">
+                  <Clock className="h-3.5 w-3.5" />
+                  Da approvare ({bookings.filter(daApprovare).length})
+                  <span className="font-normal text-text-dim">— richieste dal portale soci</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {bookings
+                    .filter(daApprovare)
+                    .map((b) => (
+                      <DaApprovareCard key={b.id} booking={b} onDone={onReload} />
+                    ))}
+                </div>
+              </div>
+            )}
+
             {/* Confermati */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-              {bookings.filter((b) => !b.is_waitlist).map((b) => (
+              {bookings.filter((b) => !b.is_waitlist && !daApprovare(b)).map((b) => (
                 <BookingCard
                   key={b.id}
                   booking={b}
@@ -392,7 +419,7 @@ function SlotBlock({
                   Lista d&apos;attesa ({bookings.filter((b) => b.is_waitlist).length})
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                  {bookings.filter((b) => b.is_waitlist).map((b) => (
+                  {bookings.filter((b) => b.is_waitlist && !daApprovare(b)).map((b) => (
                     <BookingCard
                       key={b.id}
                       booking={b}
@@ -1211,5 +1238,70 @@ function AbsencesModal({
         </div>
       </div>
     </Modal>
+  );
+}
+
+
+// Scheda di una richiesta dal portale in attesa di risposta.
+// Accetta/Rifiuta passano dalla stessa API della pagina Richieste:
+// stato + avviso al socio in un colpo solo.
+function DaApprovareCard({ booking, onDone }: { booking: BookingWithMember; onDone: () => void }) {
+  const [busy, setBusy] = useState(false);
+
+  const rispondi = async (accetta: boolean) => {
+    let motivo: string | undefined;
+    if (!accetta) {
+      const m = window.prompt('Il motivo che leggerà il socio (vuoto = standard):');
+      if (m === null) return;
+      motivo = m || undefined;
+    }
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/richieste/${booking.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accetta, motivo }),
+      });
+      if (res.ok) onDone();
+      else {
+        const j = await res.json().catch(() => ({}));
+        alert(j.error || 'Non ha funzionato');
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="rounded-md border border-amber-500/30 bg-bg-surface px-3 py-2.5">
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-sm font-medium truncate">
+            {booking.first_name} {booking.last_name}
+          </div>
+          {booking.notes && (
+            <div className="text-[10px] text-text-dim italic truncate">«{booking.notes}»</div>
+          )}
+        </div>
+        <div className="flex gap-1.5 shrink-0">
+          <button
+            onClick={() => rispondi(true)}
+            disabled={busy}
+            className="px-2.5 py-1.5 rounded bg-accent text-bg text-xs font-semibold hover:bg-accent-hover disabled:opacity-50"
+            title="Accetta: tiene il posto e avvisa il socio"
+          >
+            Accetta
+          </button>
+          <button
+            onClick={() => rispondi(false)}
+            disabled={busy}
+            className="px-2 py-1.5 rounded border border-border text-xs text-text-muted hover:text-text disabled:opacity-50"
+            title="Rifiuta col motivo"
+          >
+            ✕
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
