@@ -568,6 +568,11 @@ export interface BookingWithMember extends Booking {
   expires_at: string | null;
   medical_cert_received: boolean;
   medical_cert_expires_at: string | null;
+  // Dalla migration 0031: distinguono le richieste del portale da approvare
+  // dalle prenotazioni gia' lavorabili nel planner.
+  source?: 'staff' | 'portale';
+  accepted_at?: string | null;
+  refused_at?: string | null;
   template_name: string;
   template_wind_session: string | null;
   default_departure_time: string;

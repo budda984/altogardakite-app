@@ -20,6 +20,7 @@ import type {
 import { DISCIPLINE_LABELS, MEMBER_TYPE_LABELS, PARTICIPATION_LABELS } from '@/lib/types';
 import AddBookingModal from './AddBookingModal';
 import CreateOutingFromBookingsModal from './CreateOutingFromBookingsModal';
+import { oggiItalia } from '@/lib/dataLocale';
 
 interface InstructorAbsence {
   id: string;
@@ -422,7 +423,7 @@ function BookingCard({
   waitlist?: boolean;
 }) {
   // Avvisi
-  const today = new Date().toISOString().slice(0, 10);
+  const today = oggiItalia();
   const in30 = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
   const tesseraExpired = booking.expires_at && booking.expires_at < today;
   const tesseraExpiring = booking.expires_at && booking.expires_at >= today && booking.expires_at <= in30;

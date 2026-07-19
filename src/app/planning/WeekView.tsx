@@ -7,6 +7,7 @@ import {
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
 import type { SessionTemplate, BookingWithMember } from '@/lib/types';
+import { oggiItalia } from '@/lib/dataLocale';
 
 interface WeekAbsence {
   id: string;
@@ -84,7 +85,7 @@ export default function WeekView({ initialStart, onOpenDay }: Props) {
 
   useEffect(() => { load(); }, [load]);
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = oggiItalia();
   const days = Array.from({ length: 7 }, (_, i) => shiftDate(weekStart, i));
 
   // Indici per accesso veloce: per giorno -> per template

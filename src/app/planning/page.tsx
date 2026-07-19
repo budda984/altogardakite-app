@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { getAuth } from '@/lib/auth';
 import PlanningView from './PlanningView';
+import { oggiItalia } from '@/lib/dataLocale';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,7 +11,7 @@ export default async function PlanningPage({
   searchParams: Promise<{ date?: string }>;
 }) {
   const { date: queryDate } = await searchParams;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = oggiItalia();
   const date = queryDate || today;
 
   const auth = await getAuth();

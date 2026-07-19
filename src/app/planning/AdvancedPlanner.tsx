@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import {
   Loader2, Sailboat, GraduationCap, AlertTriangle, Check,
-  Plus, X, ChevronDown, Anchor, Inbox, Sparkles, Cloud, FileDown,
+  Plus, X, ChevronDown, Anchor, Inbox, Sparkles, Cloud, FileDown, Clock,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
@@ -40,6 +40,8 @@ export default function AdvancedPlanner({
 }: Props) {
   const [selectedTemplate, setSelectedTemplate] = useState<SessionTemplate | null>(null);
   const [bookings, setBookings] = useState<BookingWithMember[]>([]);
+  const [richiesteDaApprovare, setRichiesteDaApprovare] = useState<BookingWithMember[]>([]);
+  const [rispondendoId, setRispondendoId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [columns, setColumns] = useState<Column[]>([]);
   const [creating, setCreating] = useState(false);
@@ -70,14 +72,25 @@ export default function AdvancedPlanner({
       ]);
 
       let loadedBookings: BookingWithMember[] = [];
+      let daApprovare: BookingWithMember[] = [];
       if (bookingsRes.ok) {
         const data = await bookingsRes.json();
         const all: BookingWithMember[] = data.bookings || data || [];
-        loadedBookings = all.filter(
+        const delTemplate = all.filter(
           (b) => b.session_template_id === templateId && b.status === 'pending' && !b.is_waitlist
+        );
+        // Una richiesta dal portale senza risposta NON e' lavorabile: prima
+        // si accetta, poi si pianifica. Nel cesto entrano solo le prenotazioni
+        // della segreteria e le richieste gia' accettate.
+        loadedBookings = delTemplate.filter(
+          (b) => b.source !== 'portale' || b.accepted_at != null
+        );
+        daApprovare = delTemplate.filter(
+          (b) => b.source === 'portale' && b.accepted_at == null && b.refused_at == null
         );
       }
       setBookings(loadedBookings);
+      setRichiesteDaApprovare(daApprovare);
 
       // Ripristina piano salvato, tenendo solo bookingIds ancora validi/pending
       if (planRes.ok) {
@@ -374,6 +387,40 @@ export default function AdvancedPlanner({
 
   const usedBoatIds = new Set(columns.map((c) => c.boatId));
   const unassignedCount = cestoBookings.length;
+
+  // Accetta/rifiuta una richiesta dal portale, direttamente dal planning.
+  // Stessa API della pagina Richieste: stato + avviso al socio in un colpo.
+  const rispondiRichiesta = async (id: string, accetta: boolean) => {
+    if (!accetta) {
+      const motivo = window.prompt(
+        'Il motivo che leggera\u0300 il socio (lascia vuoto per quello standard):'
+      );
+      if (motivo === null) return; // annullato
+      setRispondendoId(id);
+      try {
+        const res = await fetch(`/api/richieste/${id}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accetta: false, motivo: motivo || undefined }),
+        });
+        if (res.ok && selectedTemplate) await loadAll(selectedTemplate.id);
+      } finally {
+        setRispondendoId(null);
+      }
+      return;
+    }
+    setRispondendoId(id);
+    try {
+      const res = await fetch(`/api/richieste/${id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accetta: true }),
+      });
+      if (res.ok && selectedTemplate) await loadAll(selectedTemplate.id);
+    } finally {
+      setRispondendoId(null);
+    }
+  };
   const draggedBooking = drag?.active ? bookingById[drag.bookingId] : null;
 
   return (
@@ -464,6 +511,57 @@ export default function AdvancedPlanner({
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4">
+          {/* DA APPROVARE: richieste dal portale in attesa di un si'/no.
+              Non sono trascinabili: prima si accetta, poi si pianifica. */}
+          {richiesteDaApprovare.length > 0 && (
+            <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-sm font-medium text-amber-400 flex items-center gap-1.5">
+                  <Clock className="h-4 w-4" /> Da approvare
+                </div>
+                <span className="text-xs px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400">
+                  {richiesteDaApprovare.length}
+                </span>
+              </div>
+              <div className="space-y-1.5">
+                {richiesteDaApprovare.map((b) => (
+                  <div
+                    key={b.id}
+                    className="flex items-center gap-2 rounded-md border border-border bg-bg-surface px-2.5 py-2"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm truncate">
+                        {b.first_name} {b.last_name}
+                      </div>
+                      {b.notes && (
+                        <div className="text-[10px] text-text-dim truncate italic">«{b.notes}»</div>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => rispondiRichiesta(b.id, true)}
+                      disabled={rispondendoId === b.id}
+                      className="shrink-0 px-2.5 py-1.5 rounded bg-accent text-bg text-xs font-semibold hover:bg-accent-hover disabled:opacity-50"
+                      title="Accetta: tiene il posto e avvisa il socio"
+                    >
+                      Accetta
+                    </button>
+                    <button
+                      onClick={() => rispondiRichiesta(b.id, false)}
+                      disabled={rispondendoId === b.id}
+                      className="shrink-0 px-2 py-1.5 rounded border border-border text-xs text-text-muted hover:text-text disabled:opacity-50"
+                      title="Rifiuta: avvisa il socio col motivo"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[10px] text-text-dim mt-2">
+                Accettata = posto tenuto e socio avvisato. Passa nel cesto qui sotto.
+              </p>
+            </div>
+          )}
+
           {/* CESTO */}
           <div
             data-drop-id="cesto"

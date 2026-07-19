@@ -26,6 +26,7 @@ import BookingsView from './BookingsView';
 import WeekView from './WeekView';
 import AdvancedPlanner from './AdvancedPlanner';
 import { generateOutingPdf, generateSessionPdf } from '@/app/report/pdfGenerators';
+import { oggiItalia } from '@/lib/dataLocale';
 
 interface OutingParticipant {
   id: string;
@@ -120,7 +121,7 @@ export default function PlanningView({
     router.replace(`/planning?${sp}`, { scroll: false });
   };
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = oggiItalia();
   const isToday = date === today;
 
   // Raggruppa uscite per template
