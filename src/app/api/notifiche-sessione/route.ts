@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuth } from '@/lib/auth';
 import { logActivity } from '@/lib/activityLog';
 import { createClient } from '@/lib/supabase/server';
+import { spingiPush } from '@/lib/spingiPush';
 
 // Notifica nel portale a tutti i prenotati di una sessione (giorno+template).
 // La selezione dei destinatari sta nella funzione avvisa_sessione() (0033):
@@ -50,6 +51,8 @@ export async function POST(request: NextRequest) {
     `Notifica portale "${body.titolo.trim()}" alla sessione del ${body.date}: ${quanti} soci`,
     { template_id: body.template_id, tipo: body.tipo || 'messaggio' }
   );
+
+  await spingiPush();
 
   return NextResponse.json({ ok: true, avvisati: quanti });
 }

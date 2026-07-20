@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuth } from '@/lib/auth';
 import { logActivity } from '@/lib/activityLog';
 import { createClient } from '@/lib/supabase/server';
+import { spingiPush } from '@/lib/spingiPush';
 
 // Accetta o rifiuta una richiesta arrivata dal portale soci.
 //
@@ -64,6 +65,9 @@ export async function POST(
       { booking_id: id, member_id: prima.member_id }
     );
   }
+
+  // L'avviso al socio e' stato scritto: sveglia subito le push.
+  await spingiPush();
 
   return NextResponse.json({ ok: true });
 }
