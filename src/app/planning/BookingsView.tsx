@@ -223,7 +223,7 @@ export default function BookingsView({
                 template,
                 // Stessi destinatari della funzione SQL: tutti tranne i
                 // "da approvare" — lista d'attesa inclusa.
-                destinatari: slotBookings.filter((b) => !daApprovare(b)).length,
+                destinatari: slotBookings.filter((b) => !daApprovare(b) && !b.is_waitlist).length,
               })
             }
             onToggleWaitlist={handleToggleWaitlist}
@@ -1388,7 +1388,9 @@ function NotificaPortaleModal({
       });
       const j = await res.json();
       if (!res.ok) setErrore(j.error || 'Non ha funzionato');
-      else setEsito(`Notifica inviata a ${j.avvisati} soci.`);
+      else if (j.avvisati === 0)
+        setEsito('Nessun destinatario: su questa sessione non ci sono soci col portale (le richieste non ancora accettate e la lista d\u2019attesa non ricevono).');
+      else setEsito(`Inviata a ${j.avvisati} ${j.avvisati === 1 ? 'socio' : 'soci'}: ${(j.nomi || []).join(', ')}.`);
     } catch {
       setErrore('Non riesco a raggiungere il server');
     } finally {

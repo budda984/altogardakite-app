@@ -32,8 +32,8 @@ const MOBILE_NAV = [
   { href: '/', label: 'Home', icon: Home },
   { href: '/planning', label: 'Planning', icon: CalendarDays },
   { href: '/richieste', label: 'Richieste', icon: Inbox },
+  { href: '/soci', label: 'Soci', icon: Users },
   { href: '/uscite', label: 'Uscite', icon: Sailboat },
-  { href: '/log', label: 'Log', icon: ScrollText },
   { href: '/configurazione', label: 'Admin', icon: Settings },
 ];
 

@@ -1,25 +1,19 @@
 -- ============================================================================
--- CIRCOLO ALTOGARDA KITE ASD - Migration 0033
--- Notifica a tutti i prenotati di una sessione (giorno + template).
+-- CIRCOLO ALTOGARDA KITE ASD - Migration 0036
+-- avvisa_sessione: restituisce i NOMI e non notifica la lista d'attesa.
 -- ============================================================================
--- La avvisa_partecipanti() della 0028 lavora su un'USCITA gia' creata.
--- Questa lavora a monte, sulla SESSIONE del planning: tutti i soci con una
--- prenotazione su quel giorno e quel template ricevono l'avviso nel portale.
+-- Due correzioni alla funzione della 0033:
+--   1. Non notifica piu' chi e' in lista d'attesa (non ha un posto, non
+--      deve ricevere gli aggiornamenti della sessione).
+--   2. Ritorna l'elenco dei destinatari invece del solo conteggio, cosi'
+--      dopo l'invio lo staff vede A CHI e' arrivato l'avviso.
 --
--- CHI RICEVE:
---   - prenotazioni della segreteria (source = 'staff')
---   - richieste dal portale GIA' ACCETTATE
---   - inclusa la lista d'attesa: un annullamento riguarda anche loro
--- CHI NO:
---   - richieste dal portale ancora senza risposta (non gli hai detto si')
---   - rifiutate e annullate
+-- Cambia il tipo di ritorno, quindi va prima eliminata la vecchia versione.
 -- ============================================================================
 
--- Ritorna i NOMI dei destinatari, non solo il conteggio: dopo l'invio lo
--- staff deve poter vedere a chi e' arrivato l'avviso.
--- La lista d'attesa e' ESCLUSA: chi e' in waitlist non ha un posto, quindi
--- non riceve gli aggiornamenti della sessione.
-create or replace function avvisa_sessione(
+drop function if exists avvisa_sessione(date, uuid, text, text, text);
+
+create function avvisa_sessione(
   p_giorno      date,
   p_template_id uuid,
   p_titolo      text,

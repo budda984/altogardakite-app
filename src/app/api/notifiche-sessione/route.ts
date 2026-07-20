@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
   }
 
   const supabase = await createClient();
-  const { data: quanti, error } = await supabase.rpc('avvisa_sessione', {
+  const { data: destinatari, error } = await supabase.rpc('avvisa_sessione', {
     p_giorno: body.date,
     p_template_id: body.template_id,
     p_titolo: body.titolo.trim(),
@@ -48,11 +48,13 @@ export async function POST(request: NextRequest) {
     supabase,
     auth,
     'booking.notify',
-    `Notifica portale "${body.titolo.trim()}" alla sessione del ${body.date}: ${quanti} soci`,
+    `Notifica portale "${body.titolo.trim()}" alla sessione del ${body.date}: ${(destinatari || []).length} soci`,
     { template_id: body.template_id, tipo: body.tipo || 'messaggio' }
   );
 
   await spingiPush();
 
-  return NextResponse.json({ ok: true, avvisati: quanti });
+  // destinatari = [{ member_id, nome }, ...]
+  const nomi = (destinatari as Array<{ nome: string }> | null)?.map((d) => d.nome) ?? [];
+  return NextResponse.json({ ok: true, avvisati: nomi.length, nomi });
 }
