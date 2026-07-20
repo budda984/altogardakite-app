@@ -3,6 +3,7 @@ import { Inbox } from 'lucide-react';
 import { getAuth } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import RichiesteList from './RichiesteList';
+import ProvaPush from './ProvaPush';
 import type { RichiestaDaRispondere } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -43,6 +44,8 @@ export default async function RichiestePage() {
           l&apos;istruttore li decidi dopo, nel planning.
         </p>
       </div>
+
+      <ProvaPush />
 
       {error ? (
         <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 text-sm">
