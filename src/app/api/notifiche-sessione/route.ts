@@ -59,13 +59,15 @@ export async function POST(request: NextRequest) {
 
   // Chi di loro ha le push attive? (push_iscrizioni sta dietro RLS: serve l'admin)
   let conPushIds = new Set<string>();
+  let verificaPushErrore: string | null = null;
   if (elenco.length > 0) {
     const admin = createAdminClient();
-    const { data: iscr } = await admin
+    const { data: iscr, error: errIscr } = await admin
       .schema('portale')
       .from('push_iscrizioni')
       .select('member_id')
       .in('member_id', elenco.map((d) => d.member_id));
+    if (errIscr) verificaPushErrore = errIscr.message;
     conPushIds = new Set((iscr ?? []).map((i) => i.member_id as string));
   }
 
@@ -78,5 +80,6 @@ export async function POST(request: NextRequest) {
     nomi: elenco.map((d) => d.nome),
     con_push: conPush,
     senza_push: senzaPush,
+    verifica_push_errore: verificaPushErrore,
   });
 }

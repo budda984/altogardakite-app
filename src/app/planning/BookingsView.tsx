@@ -1394,9 +1394,13 @@ function NotificaPortaleModal({
         const conPush = (j.con_push || []) as string[];
         const senzaPush = (j.senza_push || []) as string[];
         let msg = `Avviso creato per ${j.avvisati} ${j.avvisati === 1 ? 'socio' : 'soci'}.`;
-        if (conPush.length > 0) msg += ` Notifica sul telefono a: ${conPush.join(', ')}.`;
-        if (senzaPush.length > 0)
-          msg += ` Da contattare in altro modo (vedranno l\u2019avviso solo aprendo il portale): ${senzaPush.join(', ')}.`;
+        if (j.verifica_push_errore) {
+          msg += ` Non sono riuscito a verificare chi ha le push attive (${j.verifica_push_errore}).`;
+        } else {
+          if (conPush.length > 0) msg += ` Notifica sul telefono a: ${conPush.join(', ')}.`;
+          if (senzaPush.length > 0)
+            msg += ` Da contattare in altro modo (vedranno l\u2019avviso solo aprendo il portale): ${senzaPush.join(', ')}.`;
+        }
         setEsito(msg);
       }
     } catch {
