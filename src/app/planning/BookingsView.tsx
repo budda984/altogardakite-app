@@ -1390,7 +1390,15 @@ function NotificaPortaleModal({
       if (!res.ok) setErrore(j.error || 'Non ha funzionato');
       else if (j.avvisati === 0)
         setEsito('Nessun destinatario: su questa sessione non ci sono soci col portale (le richieste non ancora accettate e la lista d\u2019attesa non ricevono).');
-      else setEsito(`Inviata a ${j.avvisati} ${j.avvisati === 1 ? 'socio' : 'soci'}: ${(j.nomi || []).join(', ')}.`);
+      else {
+        const conPush = (j.con_push || []) as string[];
+        const senzaPush = (j.senza_push || []) as string[];
+        let msg = `Avviso creato per ${j.avvisati} ${j.avvisati === 1 ? 'socio' : 'soci'}.`;
+        if (conPush.length > 0) msg += ` Notifica sul telefono a: ${conPush.join(', ')}.`;
+        if (senzaPush.length > 0)
+          msg += ` Da contattare in altro modo (vedranno l\u2019avviso solo aprendo il portale): ${senzaPush.join(', ')}.`;
+        setEsito(msg);
+      }
     } catch {
       setErrore('Non riesco a raggiungere il server');
     } finally {

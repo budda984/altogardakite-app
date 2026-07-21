@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuth } from '@/lib/auth';
 import { logActivity } from '@/lib/activityLog';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { spingiPush } from '@/lib/spingiPush';
 
 // Notifica nel portale a tutti i prenotati di una sessione (giorno+template).
@@ -55,6 +55,28 @@ export async function POST(request: NextRequest) {
   await spingiPush();
 
   // destinatari = [{ member_id, nome }, ...]
-  const nomi = (destinatari as Array<{ nome: string }> | null)?.map((d) => d.nome) ?? [];
-  return NextResponse.json({ ok: true, avvisati: nomi.length, nomi });
+  const elenco = (destinatari as Array<{ member_id: string; nome: string }> | null) ?? [];
+
+  // Chi di loro ha le push attive? (push_iscrizioni sta dietro RLS: serve l'admin)
+  let conPushIds = new Set<string>();
+  if (elenco.length > 0) {
+    const admin = createAdminClient();
+    const { data: iscr } = await admin
+      .schema('portale')
+      .from('push_iscrizioni')
+      .select('member_id')
+      .in('member_id', elenco.map((d) => d.member_id));
+    conPushIds = new Set((iscr ?? []).map((i) => i.member_id as string));
+  }
+
+  const conPush = elenco.filter((d) => conPushIds.has(d.member_id)).map((d) => d.nome);
+  const senzaPush = elenco.filter((d) => !conPushIds.has(d.member_id)).map((d) => d.nome);
+
+  return NextResponse.json({
+    ok: true,
+    avvisati: elenco.length,
+    nomi: elenco.map((d) => d.nome),
+    con_push: conPush,
+    senza_push: senzaPush,
+  });
 }
