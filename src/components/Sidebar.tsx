@@ -1,5 +1,7 @@
 'use client';
 
+import { useState, useEffect } from 'react';
+
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -68,6 +70,28 @@ function NavLink({
 }
 
 export function Sidebar({ isAdmin = false, pendingCount = 0, richiesteCount = 0 }: SidebarProps) {
+  // Il badge parte dal valore calcolato lato server, poi si aggiorna da solo
+  // ogni minuto interrogando un endpoint leggero: cambia SOLO il numero, la
+  // pagina non si ricarica.
+  const [richieste, setRichieste] = useState(richiesteCount);
+  useEffect(() => {
+    let vivo = true;
+    const leggi = async () => {
+      try {
+        const r = await fetch('/api/richieste/conteggio', { cache: 'no-store' });
+        if (!r.ok) return;
+        const j = await r.json();
+        if (vivo && typeof j.count === 'number') setRichieste(j.count);
+      } catch {
+        // rete assente: riproviamo al giro dopo
+      }
+    };
+    const id = setInterval(leggi, 60000);
+    // e una lettura quando la scheda torna in primo piano
+    const onVis = () => { if (document.visibilityState === 'visible') leggi(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => { vivo = false; clearInterval(id); document.removeEventListener('visibilitychange', onVis); };
+  }, []);
   const pathname = usePathname();
   if (pathname.startsWith('/login') || pathname.startsWith('/registrati') || pathname.startsWith('/attesa')) {
     return null;
@@ -99,7 +123,7 @@ export function Sidebar({ isAdmin = false, pendingCount = 0, richiesteCount = 0 
               key={item.href}
               {...item}
               active={isActive(item.href)}
-              badge={item.href === '/richieste' ? richiesteCount : undefined}
+              badge={item.href === '/richieste' ? richieste : undefined}
             />
           ))}
         </div>
