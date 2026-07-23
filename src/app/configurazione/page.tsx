@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
 import SeasonSettingsCard from './SeasonSettingsCard';
+import VentoCard from './VentoCard';
 
 interface EnumGroup {
   key: string;
@@ -130,6 +131,8 @@ export default function ConfigurazionePage() {
       </div>
 
       <SeasonSettingsCard />
+
+      <VentoCard />
 
       <div className="mb-8 p-4 rounded-lg border border-blue-500/30 bg-blue-500/5 flex gap-3">
         <Info className="h-5 w-5 text-blue-400 shrink-0 mt-0.5" />
