@@ -21,6 +21,7 @@ type Esito = {
   quadro?: Riga[];
   supererebbero?: Trovato[];
   soglie?: { peler: number; ora: number; giorni: number };
+  modelli?: { raffiche: string; pressione: string };
 };
 
 function giornoIt(g: string) {
@@ -77,6 +78,14 @@ export default function VentoCard() {
           <strong className="text-text">{esito.soglie.peler} hPa</strong>, ora
           sopra <strong className="text-text">{esito.soglie.ora} nodi</strong>,
           fino a {esito.soglie.giorni} giorni avanti.
+          {esito.modelli && (
+            <>
+              {' '}Modelli: raffiche{' '}
+              <strong className="text-text">{esito.modelli.raffiche}</strong>,
+              pressione{' '}
+              <strong className="text-text">{esito.modelli.pressione}</strong>.
+            </>
+          )}
         </p>
       )}
 
