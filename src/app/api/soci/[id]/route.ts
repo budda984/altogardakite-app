@@ -37,6 +37,11 @@ export async function PATCH(
         fiscal_code: data.fiscal_code
           ? data.fiscal_code.toUpperCase().trim()
           : null,
+        birth_date: data.birth_date || null,
+        birth_place: data.birth_place ? data.birth_place.trim() : null,
+        birth_province: data.birth_province
+          ? data.birth_province.toUpperCase().trim()
+          : null,
         notes: data.notes || null,
         medical_cert_received: data.medical_cert_received,
         medical_cert_expires_at: data.medical_cert_expires_at || null,

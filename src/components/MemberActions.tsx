@@ -33,6 +33,9 @@ interface MemberData {
   phone: string | null;
   address_street: string | null;
   fiscal_code: string | null;
+  birth_date: string | null;
+  birth_place: string | null;
+  birth_province: string | null;
   notes: string | null;
   member_type: MemberType;
   expires_at: string | null;
@@ -93,6 +96,9 @@ function EditModal({ member, onClose }: { member: MemberData; onClose: () => voi
       phone: member.phone || '',
       address: member.address_street || '',
       fiscal_code: member.fiscal_code || '',
+      birth_date: member.birth_date || '',
+      birth_place: member.birth_place || '',
+      birth_province: member.birth_province || '',
       notes: member.notes || '',
       medical_cert_received: member.medical_cert_received,
       medical_cert_expires_at: member.medical_cert_expires_at || '',
@@ -133,6 +139,26 @@ function EditModal({ member, onClose }: { member: MemberData; onClose: () => voi
           <Input label="Telefono" {...register('phone')} />
         </div>
         <Input label="Codice fiscale" {...register('fiscal_code')} error={errors.fiscal_code?.message} className="uppercase font-mono" />
+
+        <div className="grid grid-cols-2 gap-4">
+          <Controller
+            control={control}
+            name="birth_date"
+            render={({ field }) => (
+              <DateInput
+                label="Data di nascita"
+                value={field.value || ''}
+                onChange={field.onChange}
+                error={errors.birth_date?.message}
+              />
+            )}
+          />
+          <div className="grid grid-cols-[1fr_auto] gap-2">
+            <Input label="Luogo di nascita" {...register('birth_place')} error={errors.birth_place?.message} />
+            <Input label="Prov." maxLength={2} {...register('birth_province')} error={errors.birth_province?.message} className="uppercase w-16" />
+          </div>
+        </div>
+
         <Input label="Indirizzo" {...register('address')} placeholder="Via, civico, citta'" />
 
         <div className="p-3 rounded bg-bg-elevated border border-border space-y-3">

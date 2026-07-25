@@ -163,6 +163,9 @@ export const memberEditSchema = z.object({
   phone: z.string().optional().or(z.literal('')),
   address: z.string().optional().or(z.literal('')),
   fiscal_code: z.string().optional().or(z.literal('')),
+  birth_date: z.string().optional().or(z.literal('')),
+  birth_place: z.string().optional().or(z.literal('')),
+  birth_province: z.string().max(2, 'Sigla di 2 lettere').optional().or(z.literal('')),
   notes: z.string().optional().or(z.literal('')),
   // Certificato medico
   medical_cert_received: z.boolean().default(false),
