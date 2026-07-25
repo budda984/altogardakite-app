@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getAuth } from '@/lib/auth';
 import { formatDate, calcAge } from '@/lib/utils';
 import { normalizePhone } from '@/lib/whatsapp';
+import NotificaSocio from './NotificaSocio';
 import { Card } from '@/components/ui/Card';
 import MemberWalletPanel from '@/components/MemberWalletPanel';
 import MemberActions from '@/components/MemberActions';
@@ -105,6 +106,7 @@ export default async function MemberDetailPage({
               <MessageCircle className="h-4 w-4" /> WhatsApp
             </a>
           )}
+          <NotificaSocio memberId={member.id} />
         </div>
 
         {/* Riga tessera + certificato medico */}
