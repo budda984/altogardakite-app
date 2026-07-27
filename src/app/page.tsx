@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
-import { Users, Sailboat, Package, GraduationCap, Plus, ArrowRight, AlertTriangle, CalendarClock, HeartPulse } from 'lucide-react';
+import { Users, Sailboat, Package, GraduationCap, Plus, ArrowRight, AlertTriangle, CalendarClock, HeartPulse, ScrollText } from 'lucide-react';
 import { formatDate, formatTime } from '@/lib/utils';
 import { BOAT_LABELS, WIND_SESSION_LABELS } from '@/lib/types';
 
@@ -71,6 +71,12 @@ export default async function Dashboard() {
           className="inline-flex items-center gap-2 bg-bg-elevated border border-border text-text px-4 py-2.5 rounded-md text-sm font-medium hover:border-accent transition-colors"
         >
           <Plus className="h-4 w-4" /> Registra uscita
+        </Link>
+        <Link
+          href="/log"
+          className="inline-flex items-center gap-2 bg-bg-elevated border border-border text-text px-4 py-2.5 rounded-md text-sm font-medium hover:border-accent transition-colors"
+        >
+          <ScrollText className="h-4 w-4" /> Registro attività
         </Link>
       </div>
 
