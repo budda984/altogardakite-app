@@ -58,8 +58,15 @@ export async function POST(
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    const { data: chiusa } = await supabase
+      .from('outings')
+      .select('code')
+      .eq('id', outingId)
+      .single();
+    const codice = chiusa?.code || outingId;
+
     await logActivity(supabase, auth, 'outing.close',
-      'Uscita chiusa (lift scalati)', { outing_id: outingId });
+      `Uscita chiusa [${codice}] (lift scalati)`, { outing_id: outingId, code: chiusa?.code });
 
     return NextResponse.json(result);
   } catch (e) {

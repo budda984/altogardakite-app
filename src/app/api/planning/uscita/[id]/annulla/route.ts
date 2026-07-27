@@ -24,6 +24,16 @@ export async function POST(
     }
 
     const supabase = await createClient();
+
+    // Il codice va letto prima: l'annullo potrebbe rendere la riga non piu'
+    // leggibile subito dopo.
+    const { data: daAnnullare } = await supabase
+      .from('outings')
+      .select('code')
+      .eq('id', outingId)
+      .single();
+    const codice = daAnnullare?.code || outingId;
+
     const { data: result, error } = await supabase.rpc('cancel_outing', {
       p_outing_id: outingId,
       p_cancelled_by: auth.userId,
@@ -35,7 +45,7 @@ export async function POST(
     }
 
     await logActivity(supabase, auth, 'outing.cancel',
-      `Uscita annullata (motivo: ${reason})`, { outing_id: outingId });
+      `Uscita annullata [${codice}] (motivo: ${reason})`, { outing_id: outingId, code: daAnnullare?.code });
 
     return NextResponse.json(result);
   } catch (e) {
