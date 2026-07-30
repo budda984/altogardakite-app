@@ -20,6 +20,7 @@ import type {
 import { DISCIPLINE_LABELS, MEMBER_TYPE_LABELS, PARTICIPATION_LABELS } from '@/lib/types';
 import AddBookingModal from './AddBookingModal';
 import CreateOutingFromBookingsModal from './CreateOutingFromBookingsModal';
+import PlanningNote from './PlanningNote';
 import { oggiItalia } from '@/lib/dataLocale';
 
 // Una richiesta dal portale ancora senza risposta: va approvata prima di
@@ -191,6 +192,7 @@ export default function BookingsView({
 
   return (
     <div className="space-y-6">
+      <PlanningNote date={date} />
       <div className="flex justify-end gap-2">
         <Button size="sm" variant="secondary" onClick={() => setShowAbsences(true)}>
           <UserX className="h-3.5 w-3.5 mr-1.5" />
