@@ -61,12 +61,22 @@ export async function GET(request: NextRequest) {
       .gte('absence_date', start)
       .lte('absence_date', end);
 
+    // Note che toccano la settimana: iniziano entro la fine E finiscono dopo
+    // l'inizio (cioe' il loro intervallo si sovrappone a start..end).
+    const notePromise = supabase
+      .from('planning_note')
+      .select('id, testo, data_da, data_a, created_by_name')
+      .lte('data_da', end)
+      .gte('data_a', start)
+      .order('data_da', { ascending: true });
+
     const [
       { data: templates },
       { data: bookings, error: bookingsErr },
       { data: outings, error: outingsErr },
       { data: absences },
-    ] = await Promise.all([templatesPromise, bookingsPromise, outingsPromise, absencesPromise]);
+      { data: note },
+    ] = await Promise.all([templatesPromise, bookingsPromise, outingsPromise, absencesPromise, notePromise]);
 
     if (bookingsErr) {
       return NextResponse.json({ error: bookingsErr.message }, { status: 500 });
@@ -82,6 +92,7 @@ export async function GET(request: NextRequest) {
       bookings: bookings || [],
       outings: outings || [],
       absences: absences || [],
+      note: note || [],
     });
   } catch (e) {
     return NextResponse.json(

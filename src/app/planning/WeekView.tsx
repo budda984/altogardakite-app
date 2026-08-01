@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import {
-  ChevronLeft, ChevronRight, Loader2, Users, Sailboat, CalendarDays, UserX,
+  ChevronLeft, ChevronRight, Loader2, Users, Sailboat, CalendarDays, UserX, StickyNote,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
@@ -15,6 +15,14 @@ interface WeekAbsence {
   absence_date: string;
   session_template_id: string | null;
   instructor: { id: string; first_name: string; last_name: string } | null;
+}
+
+interface WeekNota {
+  id: string;
+  testo: string;
+  data_da: string;
+  data_a: string;
+  created_by_name: string | null;
 }
 
 interface WeekOuting {
@@ -65,6 +73,7 @@ export default function WeekView({ initialStart, onOpenDay }: Props) {
   const [bookings, setBookings] = useState<BookingWithMember[]>([]);
   const [outings, setOutings] = useState<WeekOuting[]>([]);
   const [absences, setAbsences] = useState<WeekAbsence[]>([]);
+  const [note, setNote] = useState<WeekNota[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -77,6 +86,7 @@ export default function WeekView({ initialStart, onOpenDay }: Props) {
         setBookings(data.bookings || []);
         setOutings(data.outings || []);
         setAbsences(data.absences || []);
+        setNote(data.note || []);
       }
     } finally {
       setLoading(false);
@@ -145,6 +155,50 @@ export default function WeekView({ initialStart, onOpenDay }: Props) {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-7 gap-3">
+          {note.length > 0 && (
+            <div className="col-span-full">
+              <div className="hidden md:grid grid-cols-7 gap-x-3 gap-y-1">
+                {note.map((n) => {
+                  // Ritaglio la nota alla settimana visibile e la traduco in
+                  // colonne 1-7 (lunedi..domenica).
+                  const inizio = n.data_da < days[0] ? days[0] : n.data_da;
+                  const fine = n.data_a > days[6] ? days[6] : n.data_a;
+                  const colStart = days.indexOf(inizio) + 1;
+                  const colEnd = days.indexOf(fine) + 2; // grid-column-end e' esclusivo
+                  const continuaPrima = n.data_da < days[0];
+                  const continuaDopo = n.data_a > days[6];
+                  return (
+                    <div
+                      key={n.id}
+                      style={{ gridColumn: `${colStart} / ${colEnd}` }}
+                      className={cn(
+                        'flex items-center gap-1.5 text-[11px] px-2 py-1 bg-accent/10 text-accent border border-accent/25 overflow-hidden',
+                        continuaPrima ? 'rounded-l-none border-l-0' : 'rounded-l-md',
+                        continuaDopo ? 'rounded-r-none border-r-0' : 'rounded-r-md'
+                      )}
+                      title={n.testo}
+                    >
+                      <StickyNote className="h-3 w-3 shrink-0" />
+                      <span className="truncate">{n.testo}</span>
+                    </div>
+                  );
+                })}
+              </div>
+              {/* Su telefono la griglia diventa una colonna: le barre non
+                  avrebbero senso, elenco semplice. */}
+              <div className="md:hidden space-y-1">
+                {note.map((n) => (
+                  <div
+                    key={n.id}
+                    className="flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-md bg-accent/10 text-accent border border-accent/25"
+                  >
+                    <StickyNote className="h-3 w-3 shrink-0" />
+                    <span>{n.testo}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           {days.map((date) => {
             const dl = dayLabel(date);
             const isToday = date === today;
