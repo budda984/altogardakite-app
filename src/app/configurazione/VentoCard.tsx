@@ -11,7 +11,8 @@ import { Button } from '@/components/ui/Button';
 type Riga = {
   giorno: string;
   gradiente_mattina: number | null;
-  raffica_pomeriggio: number | null;
+  gradiente_pomeriggio: number | null;
+  bora: number | null;
 };
 type Trovato = { tipo: string; giorno: string; valore: number };
 type Esito = {
@@ -20,8 +21,8 @@ type Esito = {
   error?: string;
   quadro?: Riga[];
   supererebbero?: Trovato[];
-  soglie?: { peler: number; ora: number; giorni: number };
-  modelli?: { raffiche: string; pressione: string };
+  soglie?: { peler: number; ora: number; bora: number; giorni: number };
+  modelli?: { pressione: string };
 };
 
 function giornoIt(g: string) {
@@ -74,18 +75,12 @@ export default function VentoCard() {
 
       {esito?.soglie && (
         <p className="text-xs text-text-muted mb-3">
-          Soglie attuali: peler sotto{' '}
-          <strong className="text-text">{esito.soglie.peler} hPa</strong>, ora
-          sopra <strong className="text-text">{esito.soglie.ora} nodi</strong>,
-          fino a {esito.soglie.giorni} giorni avanti.
-          {esito.modelli && (
-            <>
-              {' '}Modelli: raffiche{' '}
-              <strong className="text-text">{esito.modelli.raffiche}</strong>,
-              pressione{' '}
-              <strong className="text-text">{esito.modelli.pressione}</strong>.
-            </>
-          )}
+          Soglie: peler grad. mattina sotto{' '}
+          <strong className="text-text">{esito.soglie.peler}</strong>, ora grad.
+          pomeriggio sopra <strong className="text-text">+{esito.soglie.ora}</strong>,
+          bora Trieste-Maribor sotto <strong className="text-text">{esito.soglie.bora}</strong> hPa.
+          Fino a {esito.soglie.giorni} giorni avanti
+          {esito.modelli ? ` · modello ${esito.modelli.pressione}` : ''}.
         </p>
       )}
 
@@ -95,8 +90,9 @@ export default function VentoCard() {
             <thead>
               <tr className="text-left text-xs text-text-dim uppercase tracking-wider">
                 <th className="py-2 pr-3 font-medium">Giorno</th>
-                <th className="py-2 pr-3 font-medium">Gradiente mattina</th>
-                <th className="py-2 pr-3 font-medium">Raffica pomeriggio</th>
+                <th className="py-2 pr-3 font-medium">Grad. mattina</th>
+                <th className="py-2 pr-3 font-medium">Grad. pomeriggio</th>
+                <th className="py-2 pr-3 font-medium">Bora</th>
                 <th className="py-2 font-medium">Avviso</th>
               </tr>
             </thead>
@@ -104,6 +100,7 @@ export default function VentoCard() {
               {quadro.map((r) => {
                 const peler = scatta.has(`peler|${r.giorno}`);
                 const ora = scatta.has(`ora|${r.giorno}`);
+                const bora = scatta.has(`bora|${r.giorno}`);
                 return (
                   <tr key={r.giorno} className="border-t border-border">
                     <td className="py-2 pr-3 text-text">{giornoIt(r.giorno)}</td>
@@ -111,12 +108,15 @@ export default function VentoCard() {
                       {r.gradiente_mattina ?? '—'}
                     </td>
                     <td className="py-2 pr-3 font-mono text-text-muted">
-                      {r.raffica_pomeriggio ?? '—'}
+                      {r.gradiente_pomeriggio ?? '—'}
+                    </td>
+                    <td className="py-2 pr-3 font-mono text-text-muted">
+                      {r.bora ?? '—'}
                     </td>
                     <td className="py-2 text-xs">
-                      {peler || ora ? (
+                      {peler || ora || bora ? (
                         <span className="text-accent font-medium">
-                          {[peler && 'peler', ora && 'ora']
+                          {[peler && 'peler', ora && 'ora', bora && 'bora']
                             .filter(Boolean)
                             .join(' + ')}
                         </span>
