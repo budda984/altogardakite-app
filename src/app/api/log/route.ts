@@ -17,6 +17,7 @@ export async function GET(request: NextRequest) {
 
     const before = request.nextUrl.searchParams.get('before');
     const category = request.nextUrl.searchParams.get('category');
+    const q = request.nextUrl.searchParams.get('q');
     const LIMIT = 50;
 
     const supabase = await createClient();
@@ -28,6 +29,11 @@ export async function GET(request: NextRequest) {
 
     if (before) query = query.lt('created_at', before);
     if (category) query = query.like('action', `${category}.%`);
+    if (q && q.trim()) {
+      // Cerca nel testo dell'evento o nel nome di chi l'ha fatto.
+      const termine = q.trim().replace(/[%,]/g, ' ');
+      query = query.or(`description.ilike.%${termine}%,actor_name.ilike.%${termine}%`);
+    }
 
     const { data, error } = await query;
     if (error) {

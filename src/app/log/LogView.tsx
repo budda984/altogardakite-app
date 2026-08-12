@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import {
-  ScrollText, Loader2, CalendarPlus, Users, Sailboat, UserX, Shield, ListFilter,
+  ScrollText, Loader2, CalendarPlus, Users, Sailboat, UserX, Shield, ListFilter, Search, X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
@@ -46,13 +46,24 @@ export default function LogView() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [category, setCategory] = useState('');
+  const [ricerca, setRicerca] = useState('');
+  const [ricercaAttiva, setRicercaAttiva] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async (cat: string) => {
+  // Debounce: interrogo il server ~400ms dopo l'ultimo tasto, non a ogni lettera.
+  useEffect(() => {
+    const timer = setTimeout(() => setRicercaAttiva(ricerca), 400);
+    return () => clearTimeout(timer);
+  }, [ricerca]);
+
+  const load = useCallback(async (cat: string, q: string) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/log${cat ? `?category=${cat}` : ''}`);
+      const params = new URLSearchParams();
+      if (cat) params.set('category', cat);
+      if (q.trim()) params.set('q', q.trim());
+      const res = await fetch(`/api/log?${params.toString()}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Errore');
       setEntries(data.entries || []);
@@ -64,14 +75,17 @@ export default function LogView() {
     }
   }, []);
 
-  useEffect(() => { load(category); }, [category, load]);
+  useEffect(() => { load(category, ricercaAttiva); }, [category, ricercaAttiva, load]);
 
   async function loadMore() {
     if (entries.length === 0) return;
     setLoadingMore(true);
     try {
       const before = encodeURIComponent(entries[entries.length - 1].created_at);
-      const res = await fetch(`/api/log?before=${before}${category ? `&category=${category}` : ''}`);
+      const params = new URLSearchParams({ before });
+      if (category) params.set('category', category);
+      if (ricercaAttiva.trim()) params.set('q', ricercaAttiva.trim());
+      const res = await fetch(`/api/log?${params.toString()}`);
       const data = await res.json();
       if (res.ok) {
         setEntries((prev) => [...prev, ...(data.entries || [])]);
@@ -92,6 +106,27 @@ export default function LogView() {
         <p className="text-sm text-text-muted mt-1">
           Chi ha fatto cosa nell&apos;app, dal pi&ugrave; recente.
         </p>
+      </div>
+
+      {/* Ricerca */}
+      <div className="relative mb-3">
+        <Search className="h-4 w-4 text-text-dim absolute left-3 top-1/2 -translate-y-1/2" />
+        <input
+          type="text"
+          value={ricerca}
+          onChange={(e) => setRicerca(e.target.value)}
+          placeholder="Cerca per socio o testo dell'evento…"
+          className="w-full pl-9 pr-9 py-2 text-sm rounded-md border border-border bg-bg-surface text-text focus:outline-none focus:ring-1 focus:ring-accent"
+        />
+        {ricerca && (
+          <button
+            onClick={() => setRicerca('')}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-text-dim hover:text-text"
+            aria-label="Cancella ricerca"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
       {/* Filtro categoria */}
