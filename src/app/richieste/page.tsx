@@ -4,6 +4,7 @@ import { getAuth } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import RichiesteList from './RichiesteList';
 import ProvaPush from './ProvaPush';
+import Broadcast from './Broadcast';
 import type { RichiestaDaRispondere } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -44,6 +45,8 @@ export default async function RichiestePage() {
           l&apos;istruttore li decidi dopo, nel planning.
         </p>
       </div>
+
+      <Broadcast />
 
       <ProvaPush />
 
