@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Home, Users, Sailboat, Package, GraduationCap,
-  UserCog, Anchor, Settings, Tag, BarChart3, LogOut, Shield, CalendarDays, ScrollText,
+  UserCog, Anchor, Settings, Tag, BarChart3, LogOut, Shield, CalendarDays, ScrollText, Youtube,
   Inbox,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -27,6 +27,7 @@ const ADMIN_NAV = [
   { href: '/barche', label: 'Imbarcazioni', icon: Anchor },
   { href: '/attrezzatura', label: 'Attrezzatura', icon: Package },
   { href: '/corsi', label: 'Corsi', icon: GraduationCap },
+  { href: '/accademia', label: 'Accademia', icon: Youtube },
   { href: '/servizi', label: 'Listino servizi', icon: Tag },
 ];
 
