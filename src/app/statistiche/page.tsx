@@ -1,8 +1,8 @@
 import Link from 'next/link';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
 import {
   BarChart3, FileText, Sailboat, Users, Wind, GraduationCap,
-  XCircle, CheckCircle2, Clock, ArrowRight,
+  XCircle, CheckCircle2, Clock, ArrowRight, Smartphone, Bell, Youtube,
 } from 'lucide-react';
 import { DISCIPLINE_LABELS } from '@/lib/types';
 
@@ -44,6 +44,61 @@ export default async function StatistichePage() {
   const outings = outingsYearRes.data || [];
   const outingsMonth = outingsMonthRes.data || [];
   const movements = movementsRes.data || [];
+
+  // ── Portale soci: adozione e uso ──────────────────────────────────────────
+  // Dati aggregati da quello che il database gia' registra: nessun
+  // tracciamento aggiuntivo dei singoli soci.
+  const admin = createAdminClient();
+  const [
+    accessiRes,
+    iscrizioniRes,
+    ventoRes,
+    prenotazioniRes,
+    preferitiRes,
+    videoRes,
+  ] = await Promise.all([
+    // Soci che hanno un accesso al portale collegato
+    supabase.from('profiles').select('member_id').eq('role', 'socio').not('member_id', 'is', null),
+    // Dispositivi iscritti alle notifiche (RLS stretta: serve l'admin)
+    admin.schema('portale').from('push_iscrizioni').select('member_id'),
+    // Chi ha acceso gli avvisi vento
+    admin.schema('portale').from('vento_iscritti').select('member_id'),
+    // Prenotazioni dell'anno: portale vs sportello
+    supabase.from('bookings').select('source').gte('booking_date', yearStart),
+    // Preferiti dell'Accademia
+    admin.schema('portale').from('accademia_preferiti').select('video_id'),
+    admin.schema('portale').from('accademia_video').select('id, titolo'),
+  ]);
+
+  const sociConAccesso = new Set(
+    (accessiRes.data || []).map((p) => p.member_id as string)
+  ).size;
+  const dispositivi = (iscrizioniRes.data || []).length;
+  const sociConPush = new Set(
+    (iscrizioniRes.data || []).map((r) => r.member_id as string)
+  ).size;
+  const sociVento = (ventoRes.data || []).length;
+
+  const prenotazioni = prenotazioniRes.data || [];
+  const daPortale = prenotazioni.filter((b) => b.source === 'portale').length;
+  const daSportello = prenotazioni.length - daPortale;
+  const quotaPortale = prenotazioni.length
+    ? Math.round((daPortale / prenotazioni.length) * 100)
+    : 0;
+
+  // Video piu' messi tra i preferiti (conteggi, non chi li ha scelti)
+  const contaPref = new Map<string, number>();
+  (preferitiRes.data || []).forEach((r) => {
+    const id = r.video_id as string;
+    contaPref.set(id, (contaPref.get(id) || 0) + 1);
+  });
+  const titoliVideo = new Map(
+    (videoRes.data || []).map((v) => [v.id as string, v.titolo as string])
+  );
+  const topVideo = Array.from(contaPref.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([id, n]) => ({ label: titoliVideo.get(id) || 'Video rimosso', value: n }));
 
   // Aggregazioni soci
   const membersByType: Record<string, number> = { sostenitore: 0, normale: 0, con_lift: 0 };
@@ -232,6 +287,54 @@ export default async function StatistichePage() {
             </Link>
           </div>
         </div>
+      </section>
+
+      {/* Portale soci */}
+      <section className="mt-10">
+        <h2 className="font-display text-xl font-semibold tracking-tight mb-1 flex items-center gap-2">
+          <Smartphone className="h-5 w-5 text-accent" />
+          Portale soci
+        </h2>
+        <p className="text-xs text-text-muted mb-4">
+          Quanto viene usata l&apos;app. Numeri complessivi, senza dati sui singoli soci.
+        </p>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+          <KpiCard
+            icon={Users}
+            label="Soci col portale"
+            value={sociConAccesso}
+            sublabel={`su ${members.length} soci attivi`}
+          />
+          <KpiCard
+            icon={Bell}
+            label="Notifiche attive"
+            value={sociConPush}
+            sublabel={`${dispositivi} ${dispositivi === 1 ? 'dispositivo' : 'dispositivi'}`}
+          />
+          <KpiCard
+            icon={Wind}
+            label="Avvisi vento"
+            value={sociVento}
+            sublabel="soci iscritti"
+          />
+          <KpiCard
+            icon={CheckCircle2}
+            label="Prenotazioni da app"
+            value={`${quotaPortale}%`}
+            sublabel={`${daPortale} dal portale, ${daSportello} da voi`}
+          />
+        </div>
+
+        {topVideo.length > 0 && (
+          <div className="bg-bg-surface border border-border rounded-lg p-5">
+            <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+              <Youtube className="h-4 w-4 text-accent" />
+              Video piu&apos; salvati nei preferiti
+            </h3>
+            <BarChart data={topVideo} />
+          </div>
+        )}
       </section>
     </div>
   );
