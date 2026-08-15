@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Mail, Phone, MapPin, Calendar, CheckCircle2, AlertTriangle, Heart, User as UserIcon, Wind, MessageCircle } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, MapPin, Calendar, CheckCircle2, AlertTriangle, Heart, User as UserIcon, Wind, MessageCircle, CalendarClock, Clock } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { getAuth } from '@/lib/auth';
 import { formatDate, calcAge } from '@/lib/utils';
@@ -10,6 +10,7 @@ import { Card } from '@/components/ui/Card';
 import MemberWalletPanel from '@/components/MemberWalletPanel';
 import MemberActions from '@/components/MemberActions';
 import { MEMBER_TYPE_LABELS } from '@/lib/types';
+import { oggiItalia } from '@/lib/dataLocale';
 
 export default async function MemberDetailPage({
   params,
@@ -32,8 +33,11 @@ export default async function MemberDetailPage({
 
   const auth = await getAuth();
 
+  // Prenotazioni da oggi in avanti: quelle "in corso" che interessano allo staff.
+  const oggi = oggiItalia();
+
   // Corsi e uscite del socio
-  const [{ data: courses }, { data: outings }] = await Promise.all([
+  const [{ data: courses }, { data: outings }, { data: prenotazioni }] = await Promise.all([
     supabase
       .from('courses')
       .select('*')
@@ -45,6 +49,12 @@ export default async function MemberDetailPage({
       .eq('member_id', id)
       .order('outings(outing_date)', { ascending: false })
       .limit(10),
+    supabase
+      .from('bookings_with_member')
+      .select('id, booking_date, status, is_waitlist, source, template_name, template_wind_session')
+      .eq('member_id', id)
+      .gte('booking_date', oggi)
+      .order('booking_date', { ascending: true }),
   ]);
 
   return (
@@ -214,6 +224,50 @@ export default async function MemberDetailPage({
         </Card>
 
         {/* Corsi */}
+        <Card title={`Prenotazioni in corso ${prenotazioni?.length ? `(${prenotazioni.length})` : ''}`}>
+          {prenotazioni && prenotazioni.length > 0 ? (
+            <ul className="space-y-3 text-sm">
+              {prenotazioni.map((p) => {
+                const inAttesa = p.status === 'da_approvare';
+                const rifiutata = p.status === 'rifiutata';
+                return (
+                  <li key={p.id} className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="font-medium flex items-center gap-1.5">
+                        <CalendarClock className="h-3.5 w-3.5 text-text-dim" />
+                        {formatDate(p.booking_date)}
+                      </div>
+                      <div className="text-xs text-text-muted">
+                        {p.template_name || p.template_wind_session || 'Sessione'}
+                        {p.source === 'portale' && ' • dal portale'}
+                      </div>
+                    </div>
+                    {p.is_waitlist ? (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-bg-elevated text-text-muted border border-border inline-flex items-center gap-1">
+                        <Clock className="h-3 w-3" /> Lista d&apos;attesa
+                      </span>
+                    ) : inAttesa ? (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-500 border border-amber-500/25">
+                        Da approvare
+                      </span>
+                    ) : rifiutata ? (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-bg-elevated text-text-dim border border-border">
+                        Rifiutata
+                      </span>
+                    ) : (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-success/15 text-success border border-success/25">
+                        Confermata
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <div className="text-sm text-text-muted">Nessuna prenotazione futura.</div>
+          )}
+        </Card>
+
         <Card title={`Corsi ${courses?.length ? `(${courses.length})` : ''}`}>
           {courses && courses.length > 0 ? (
             <ul className="space-y-3 text-sm">
