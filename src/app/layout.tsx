@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { Sidebar, MobileNav } from '@/components/Sidebar';
+import AggiornaAlRitorno from '@/components/AggiornaAlRitorno';
 import MobileThemeToggle from '@/components/MobileThemeToggle';
 import { getAuth } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
@@ -50,6 +51,7 @@ export default async function RootLayout({
         />
       </head>
       <body>
+        <AggiornaAlRitorno />
         <div className="flex min-h-screen">
           <Sidebar
             isAdmin={auth?.isAdmin || false}
