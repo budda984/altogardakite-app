@@ -9,7 +9,7 @@ import NotificaSocio from './NotificaSocio';
 import { Card } from '@/components/ui/Card';
 import MemberWalletPanel from '@/components/MemberWalletPanel';
 import MemberActions from '@/components/MemberActions';
-import { MEMBER_TYPE_LABELS } from '@/lib/types';
+import { MEMBER_TYPE_LABELS, PARTICIPATION_LABELS } from '@/lib/types';
 import { oggiItalia } from '@/lib/dataLocale';
 
 export default async function MemberDetailPage({
@@ -37,7 +37,12 @@ export default async function MemberDetailPage({
   const oggi = oggiItalia();
 
   // Corsi e uscite del socio
-  const [{ data: courses }, { data: outings }, { data: prenotazioni }] = await Promise.all([
+  const [
+    { data: courses },
+    { data: outings },
+    { data: prenotazioni },
+    { data: tutteUscite },
+  ] = await Promise.all([
     supabase
       .from('courses')
       .select('*')
@@ -55,7 +60,32 @@ export default async function MemberDetailPage({
       .eq('member_id', id)
       .gte('booking_date', oggi)
       .order('booking_date', { ascending: true }),
+    // Tutte le partecipazioni, campi minimi: servono solo per i conteggi.
+    supabase
+      .from('outing_participants')
+      .select('participation_type, outings(outing_date, status)')
+      .eq('member_id', id),
   ]);
+
+  // ── Riepilogo attivita' ───────────────────────────────────────────────────
+  // Contiamo solo le uscite chiuse: bozze e annullate non sono attivita' svolta.
+  type Part = { participation_type: string; outings: { outing_date: string; status: string } | null };
+  const svolte = ((tutteUscite || []) as unknown as Part[]).filter(
+    (p) => p.outings?.status === 'chiusa'
+  );
+  const annoCorrente = new Date().getFullYear();
+  const usciteAnno = svolte.filter(
+    (p) => new Date(p.outings!.outing_date).getFullYear() === annoCorrente
+  ).length;
+  const perTipo: Record<string, number> = {};
+  svolte.forEach((p) => {
+    perTipo[p.participation_type] = (perTipo[p.participation_type] || 0) + 1;
+  });
+  const dateSvolte = svolte
+    .map((p) => p.outings!.outing_date)
+    .sort();
+  const primaUscita = dateSvolte[0];
+  const ultimaUscita = dateSvolte[dateSvolte.length - 1];
 
   return (
     <div className="p-4 lg:p-10 max-w-5xl">
@@ -289,6 +319,56 @@ export default async function MemberDetailPage({
         </Card>
 
         {/* Uscite */}
+        <Card title="Riepilogo attività">
+          {svolte.length > 0 ? (
+            <>
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div className="bg-bg-elevated border border-border rounded-md p-3">
+                  <div className="text-2xl font-bold text-text">{svolte.length}</div>
+                  <div className="text-xs text-text-muted mt-0.5">
+                    uscite in totale
+                  </div>
+                </div>
+                <div className="bg-bg-elevated border border-border rounded-md p-3">
+                  <div className="text-2xl font-bold text-text">{usciteAnno}</div>
+                  <div className="text-xs text-text-muted mt-0.5">
+                    nel {annoCorrente}
+                  </div>
+                </div>
+              </div>
+
+              <dl className="space-y-2 text-sm">
+                {Object.entries(perTipo)
+                  .sort((a, b) => b[1] - a[1])
+                  .map(([tipo, n]) => (
+                    <div key={tipo} className="flex items-center justify-between">
+                      <dt className="text-text-muted">
+                        {PARTICIPATION_LABELS[tipo as keyof typeof PARTICIPATION_LABELS] || tipo}
+                      </dt>
+                      <dd className="font-mono text-text">{n}</dd>
+                    </div>
+                  ))}
+                {primaUscita && (
+                  <div className="flex items-center justify-between pt-2 border-t border-border">
+                    <dt className="text-text-muted text-xs">Prima uscita</dt>
+                    <dd className="text-xs text-text">{formatDate(primaUscita)}</dd>
+                  </div>
+                )}
+                {ultimaUscita && (
+                  <div className="flex items-center justify-between">
+                    <dt className="text-text-muted text-xs">Ultima uscita</dt>
+                    <dd className="text-xs text-text">{formatDate(ultimaUscita)}</dd>
+                  </div>
+                )}
+              </dl>
+            </>
+          ) : (
+            <div className="text-sm text-text-muted">
+              Nessuna uscita conclusa finora.
+            </div>
+          )}
+        </Card>
+
         <Card title="Ultime uscite">
           {outings && outings.length > 0 ? (
             <ul className="space-y-2 text-sm">
