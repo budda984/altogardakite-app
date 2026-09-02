@@ -62,7 +62,7 @@ export default async function RootLayout({
             {children}
           </main>
         </div>
-        <MobileNav />
+        <MobileNav richiesteCount={richiesteCount} />
         <MobileThemeToggle />
       </body>
     </html>

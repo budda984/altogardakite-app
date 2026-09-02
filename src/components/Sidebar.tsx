@@ -180,7 +180,29 @@ export function Sidebar({ isAdmin = false, pendingCount = 0, richiesteCount = 0 
   );
 }
 
-export function MobileNav() {
+export function MobileNav({ richiesteCount = 0 }: { richiesteCount?: number }) {
+  // Stesso meccanismo della barra laterale: il numero parte da quello
+  // calcolato lato server e si aggiorna da solo ogni minuto e quando si torna
+  // sull'app, cosi' una richiesta nuova si vede senza ricaricare la pagina.
+  const [richieste, setRichieste] = useState(richiesteCount);
+  useEffect(() => {
+    let vivo = true;
+    const leggi = async () => {
+      try {
+        const r = await fetch('/api/richieste/conteggio', { cache: 'no-store' });
+        if (!r.ok) return;
+        const j = await r.json();
+        if (vivo && typeof j.count === 'number') setRichieste(j.count);
+      } catch {
+        // rete assente: riproviamo al giro dopo
+      }
+    };
+    const id = setInterval(leggi, 60000);
+    const onVis = () => { if (document.visibilityState === 'visible') leggi(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => { vivo = false; clearInterval(id); document.removeEventListener('visibilitychange', onVis); };
+  }, []);
+
   const pathname = usePathname();
   if (pathname.startsWith('/login') || pathname.startsWith('/registrati') || pathname.startsWith('/attesa')) {
     return null;
@@ -191,16 +213,27 @@ export function MobileNav() {
       <div className="grid grid-cols-6">
         {MOBILE_NAV.map(({ href, label, icon: Icon }) => {
           const active = href === '/' ? pathname === '/' : pathname.startsWith(href);
+          const daVedere = href === '/richieste' && richieste > 0;
           return (
             <Link
               key={href}
               href={href}
               className={cn(
-                'flex flex-col items-center gap-1 py-3 text-[10px]',
-                active ? 'text-accent' : 'text-text-muted'
+                'relative flex flex-col items-center gap-1 py-3 text-[10px]',
+                active ? 'text-accent' : daVedere ? 'text-amber-500' : 'text-text-muted'
               )}
             >
-              <Icon className="h-5 w-5" />
+              <span className="relative">
+                <Icon className="h-5 w-5" />
+                {daVedere && (
+                  <span
+                    className="absolute -top-1.5 -right-2 min-w-[17px] h-[17px] px-1 rounded-full bg-amber-500 text-bg text-[10px] font-bold leading-[17px] text-center"
+                    aria-label={`${richieste} richieste da approvare`}
+                  >
+                    {richieste > 9 ? '9+' : richieste}
+                  </span>
+                )}
+              </span>
               {label}
             </Link>
           );
