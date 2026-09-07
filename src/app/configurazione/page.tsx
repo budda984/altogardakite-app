@@ -13,6 +13,7 @@ import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
 import SeasonSettingsCard from './SeasonSettingsCard';
 import VentoCard from './VentoCard';
+import ScorciatoieMobile from './ScorciatoieMobile';
 
 interface EnumGroup {
   key: string;
@@ -129,6 +130,8 @@ export default function ConfigurazionePage() {
           Tipologie, categorie e parametri di sistema
         </p>
       </div>
+
+      <ScorciatoieMobile />
 
       <SeasonSettingsCard />
 
