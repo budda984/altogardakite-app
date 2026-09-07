@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
-import { Users, Sailboat, Package, GraduationCap, Plus, ArrowRight, AlertTriangle, CalendarClock, HeartPulse, ScrollText, BarChart3 } from 'lucide-react';
+import { Users, Sailboat, Package, GraduationCap, Plus, ArrowRight, AlertTriangle, CalendarClock, HeartPulse, ScrollText, BarChart3, UserCog } from 'lucide-react';
 import { formatDate, formatTime } from '@/lib/utils';
 import { BOAT_LABELS, WIND_SESSION_LABELS } from '@/lib/types';
 
@@ -83,6 +83,12 @@ export default async function Dashboard() {
           className="inline-flex items-center gap-2 bg-bg-elevated border border-border text-text px-4 py-2.5 rounded-md text-sm font-medium hover:border-accent transition-colors"
         >
           <BarChart3 className="h-4 w-4" /> Statistiche
+        </Link>
+        <Link
+          href="/istruttori"
+          className="inline-flex items-center gap-2 bg-bg-elevated border border-border text-text px-4 py-2.5 rounded-md text-sm font-medium hover:border-accent transition-colors"
+        >
+          <UserCog className="h-4 w-4" /> Istruttori
         </Link>
       </div>
 
