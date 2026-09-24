@@ -139,7 +139,8 @@ async function reportMember(supabase: SB, memberId: string, from: string, to: st
     supabase.from('packages')
       .select('service_name_snapshot, lifts_total, lifts_used, is_subscription, valid_from, valid_until, created_at, discipline')
       .eq('member_id', memberId)
-      .gte('created_at', from).lte('created_at', to + 'T23:59:59'),
+      .gte('created_at', from).lte('created_at', to + 'T23:59:59')
+      .order('created_at', { ascending: true }),
     supabase.from('member_active_subscriptions')
       .select('*')
       .eq('member_id', memberId),
@@ -249,10 +250,18 @@ async function reportInstructor(supabase: SB, instructorId: string, from: string
     boat: { name: string } | { name: string }[] | null;
     outing_participants: { id: string; member: unknown }[];
   };
-  const outings = assignments.map((a) => {
-    const o = a.outings as unknown as OutingFromAssignment;
-    return { ...o, role_in_outing: a.role };
-  });
+  // Ordinamento in JS: la query parte da outing_instructors e l'ordinamento
+  // su una tabella collegata non e' affidabile in PostgREST, quindi senza
+  // questo le sessioni uscivano in ordine sparso nel PDF.
+  const outings = assignments
+    .map((a) => {
+      const o = a.outings as unknown as OutingFromAssignment;
+      return { ...o, role_in_outing: a.role };
+    })
+    .sort((a, b) => {
+      if (a.outing_date !== b.outing_date) return a.outing_date < b.outing_date ? -1 : 1;
+      return (a.departure_time || '') < (b.departure_time || '') ? -1 : 1;
+    });
 
   const closed = outings.filter((o) => o.status === 'chiusa').length;
   const cancelled = outings.filter((o) => o.status === 'annullata').length;

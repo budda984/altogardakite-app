@@ -15,6 +15,32 @@ function formatRange(from: string, to: string): string {
   return `${formatDate(from)} → ${formatDate(to)}`;
 }
 
+/**
+ * Ordina le uscite dalla piu' vecchia alla piu' recente, e a parita' di
+ * giorno per orario di partenza.
+ *
+ * Serve perche' il database, quando una query non chiede un ordinamento,
+ * restituisce le righe nell'ordine che gli fa comodo: nei PDF le uscite
+ * uscivano mescolate. Ordinare qui, e non solo nelle query, vuol dire che il
+ * PDF esce in ordine qualunque cosa arrivi dall'API.
+ */
+function perData<T extends { outing_date: string; departure_time?: string | null }>(
+  righe: T[]
+): T[] {
+  return [...righe].sort((a, b) => {
+    if (a.outing_date !== b.outing_date) {
+      return a.outing_date < b.outing_date ? -1 : 1;
+    }
+    const oa = a.departure_time || '';
+    const ob = b.departure_time || '';
+    if (oa === ob) return 0;
+    // Chi non ha orario va in fondo al suo giorno.
+    if (!oa) return 1;
+    if (!ob) return -1;
+    return oa < ob ? -1 : 1;
+  });
+}
+
 const DISCIPLINE_LABELS: Record<string, string> = {
   kite: 'Kite', wingfoil: 'Wingfoil', sit_kite: 'Sit-kite',
   wingfoil_adattato: 'Wingfoil adattato', corso: 'Corso', altro: 'Altro',
@@ -334,7 +360,7 @@ export function generateBoatReport(data: BoatData) {
     autoTable(doc, {
       startY: y,
       head: [['Data', 'Orario', 'Disciplina', 'Stato', 'Part.', 'Istruttori']],
-      body: data.outings.map((o) => {
+      body: perData(data.outings).map((o) => {
         const insts = (o.outing_instructors || [])
           .map((oi) => {
             const i = Array.isArray(oi.instructor) ? oi.instructor[0] : oi.instructor;
@@ -422,7 +448,7 @@ export function generateInstructorReport(data: InstructorData) {
     autoTable(doc, {
       startY: y,
       head: [['Data', 'Orario', 'Barca', 'Disciplina', 'Stato', 'Part.']],
-      body: data.outings.map((o) => {
+      body: perData(data.outings).map((o) => {
         const boat = Array.isArray(o.boat) ? o.boat[0] : o.boat;
         return [
           formatDate(o.outing_date),

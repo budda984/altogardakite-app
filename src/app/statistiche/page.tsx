@@ -5,6 +5,7 @@ import {
   XCircle, CheckCircle2, Clock, ArrowRight, Smartphone, Bell, Youtube,
 } from 'lucide-react';
 import { DISCIPLINE_LABELS } from '@/lib/types';
+import { cn } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,6 +20,7 @@ export default async function StatistichePage() {
     outingsYearRes,
     outingsMonthRes,
     movementsRes,
+    partecipazioniRes,
   ] = await Promise.all([
     // Soci attivi
     supabase.from('members').select('id, member_type, active').eq('active', true),
@@ -38,12 +40,41 @@ export default async function StatistichePage() {
       .select('lift_delta, lift_discipline, movement_type, member_id')
       .eq('is_reversed', false)
       .gte('movement_date', yearStart),
+    // Partecipazioni alle uscite CHIUSE dell'anno: servono per la classifica.
+    // Solo le chiuse, come nel riepilogo della scheda socio: bozze e annullate
+    // non sono attivita' svolta.
+    supabase
+      .from('outing_participants')
+      .select('member_id, member:members(first_name, last_name), outings!inner(outing_date, status)')
+      .gte('outings.outing_date', yearStart)
+      .eq('outings.status', 'chiusa'),
   ]);
 
   const members = membersRes.data || [];
   const outings = outingsYearRes.data || [];
   const outingsMonth = outingsMonthRes.data || [];
   const movements = movementsRes.data || [];
+
+  // ── Classifica soci per uscite ────────────────────────────────────────────
+  type Partecipazione = {
+    member_id: string;
+    member: { first_name: string; last_name: string } | { first_name: string; last_name: string }[] | null;
+  };
+  const contaSocio = new Map<string, { nome: string; uscite: number }>();
+  ((partecipazioniRes.data || []) as unknown as Partecipazione[]).forEach((p) => {
+    // Supabase puo' restituire la relazione come oggetto o come array.
+    const m = Array.isArray(p.member) ? p.member[0] : p.member;
+    if (!m) return;
+    const nome = `${m.first_name} ${m.last_name}`;
+    const voce = contaSocio.get(p.member_id);
+    if (voce) voce.uscite++;
+    else contaSocio.set(p.member_id, { nome, uscite: 1 });
+  });
+  const classifica = Array.from(contaSocio.entries())
+    .map(([id, v]) => ({ id, ...v }))
+    .sort((a, b) => (b.uscite - a.uscite) || a.nome.localeCompare(b.nome))
+    .slice(0, 15);
+  const usciteMax = classifica[0]?.uscite || 1;
 
   // ── Portale soci: adozione e uso ──────────────────────────────────────────
   // Dati aggregati da quello che il database gia' registra: nessun
@@ -261,6 +292,46 @@ export default async function StatistichePage() {
               .map(([k, v]) => ({ label: DISCIPLINE_LABELS[k as keyof typeof DISCIPLINE_LABELS] || k, value: v }))
               .sort((a, b) => b.value - a.value)} />
           </div>
+        </section>
+      )}
+
+      {/* Classifica soci per uscite */}
+      {classifica.length > 0 && (
+        <section className="mb-8">
+          <h2 className="text-xs uppercase tracking-widest text-text-dim mb-3">
+            Soci piu&apos; attivi ({today.getFullYear()})
+          </h2>
+          <div className="bg-bg-surface border border-border rounded-lg divide-y divide-border">
+            {classifica.map((s, i) => (
+              <Link
+                key={s.id}
+                href={`/soci/${s.id}`}
+                className="flex items-center gap-3 px-4 py-2.5 hover:bg-bg-elevated transition-colors"
+              >
+                <span
+                  className={cn(
+                    'w-6 text-center text-xs font-mono shrink-0',
+                    i < 3 ? 'text-accent font-bold' : 'text-text-dim'
+                  )}
+                >
+                  {i + 1}
+                </span>
+                <span className="flex-1 min-w-0 text-sm text-text truncate">{s.nome}</span>
+                <div className="hidden sm:block w-32 h-1.5 bg-bg-elevated rounded-full overflow-hidden shrink-0">
+                  <div
+                    className="h-full bg-accent rounded-full"
+                    style={{ width: `${(s.uscite / usciteMax) * 100}%` }}
+                  />
+                </div>
+                <span className="w-10 text-right font-mono text-sm text-text shrink-0">
+                  {s.uscite}
+                </span>
+              </Link>
+            ))}
+          </div>
+          <p className="text-[11px] text-text-dim mt-2">
+            Uscite concluse nell&apos;anno. Tocca un nome per aprire la scheda.
+          </p>
         </section>
       )}
 
